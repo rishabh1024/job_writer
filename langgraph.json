@@ -1,0 +1,10 @@
+{
+  "dependencies": [
+    "."
+  ],
+  "graphs": {
+    "job_application": "langgraph_init:job_app_graph"
+  },
+  "env": "./.env",
+  "python_version": "3.11"
+}
