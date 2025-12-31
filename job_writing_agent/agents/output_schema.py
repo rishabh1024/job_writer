@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
+import dspy
 
 class TavilyQuerySet(BaseModel):
     query1: Optional[List[str]] = Field(default=None, description="First search query and its rationale, e.g., ['query text']")
@@ -17,3 +18,11 @@ class TavilyQuerySet(BaseModel):
                 # Updated error message for clarity
                 raise ValueError("Each query list, when provided, must contain exactly one string: the query text.")
         return v
+
+class TavilySearchQueries(dspy.Signature):
+    """Use the job description and company name 
+    to create exactly 5 search queries for the tavily search tool in JSON Format"""
+    job_description = dspy.InputField(desc="Job description of the role that candidate is applying for.")
+    company_name = dspy.InputField(desc="Name of the company the candidate is applying for.")
+    search_queries = dspy.OutputField(desc="Dictionary of tavily search queries which will gather understanding of the company and it's culture", json=True)
+    search_query_relevance = dspy.OutputField(desc="Dictionary of relevance for each tavily search query that is generated", json=True)

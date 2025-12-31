@@ -1,21 +1,23 @@
 import logging
 from datetime import datetime
+import json
+import re
 
 from ..classes.classes import AppState
 from ..prompts.templates import (
     DRAFT_RATING_PROMPT,
     BEST_DRAFT_SELECTION_PROMPT
 )
+from ..utils.llm_provider_factory import LLMFactory
+
 
 
 logger = logging.getLogger(__name__)
 # Constants
 CURRENT_DATE = datetime.now().strftime("%A, %B %d, %Y")
 
-# LLM = LLMClient()
-# llm = LLMClient().get_llm()
-# llm_precise = LLMClient().get_llm()
-
+llm_factory = LLMFactory()
+llm_precise = llm_factory.create_langchain(model="qwen/qwen3-4b:free", provider="openrouter", temperature=0.1)
 
 def self_consistency_vote(state: AppState) -> AppState:
     """Choose the best draft from multiple variations."""
@@ -28,25 +30,25 @@ def self_consistency_vote(state: AppState) -> AppState:
 
     # Get resume and job summaries, handling different formats
     try:
-        if isinstance(state["resume"], list) and len(state["resume"]) > 0:
-            if hasattr(state["resume"][0], 'page_content'):
-                resume_summary = state["resume"][0].page_content
+        if isinstance(state["resume_path"], list) and len(state["resume_path"]) > 0:
+            if hasattr(state["resume_path"][0], 'page_content'):
+                resume_summary = state["resume_path"][0].page_content
             else:
-                resume_summary = state["resume"][0]
+                resume_summary = state["resume_path"][0]
         else:
-            resume_summary = str(state["resume"])
+            resume_summary = str(state["resume_path"])
     except Exception as e:
         print(f"Warning: Error getting resume summary: {e}")
-        resume_summary = str(state["resume"])
+        resume_summary = str(state["resume_path"])
 
     try:
-        if isinstance(state["job_description"], list) and len(state["job_description"]) > 0:
-            job_summary = state["job_description"][0]
+        if isinstance(state["job_description_source"], list) and len(state["job_description_source"]) > 0:
+            job_summary = state["job_description_source"][0]
         else:
-            job_summary = str(state["job_description"])
+            job_summary = str(state["job_description_source"])
     except Exception as e:
         print(f"Warning: Error getting job summary: {e}")
-        job_summary = str(state["job_description"])
+        job_summary = str(state["job_description_source"])
 
     for i, draft in enumerate(all_drafts):
         rating = llm_precise.invoke(DRAFT_RATING_PROMPT.format(

@@ -2,14 +2,16 @@
 State definitions for the Job Writer LangGraph Workflow.
 """
 
+from langgraph.store.base import Op
 from typing_extensions import List, Dict, Any
 from langgraph.graph import MessagesState
+from dataclasses import dataclass
 
-
+@dataclass
 class AppState(MessagesState):
     """
     State container for the job application writer workflow.
-    
+
     Attributes:
         resume: List of text chunks from the candidate's resume
         job_description: List of text chunks from the job description
@@ -26,7 +28,7 @@ class AppState(MessagesState):
     company_research_data: Dict[str, Any]
     draft: str
     feedback: str
-    final: str
+    final_version: str
     content: str  # "cover_letter", "bullets", "linkedin_note"
     current_node: str
 
@@ -34,7 +36,7 @@ class AppState(MessagesState):
 class DataLoadState(MessagesState):
     """
     State container for the job application writer workflow.
-    
+
     Attributes:
         resume: List of text chunks from the candidate's resume
         job_description: List of text chunks from the job description

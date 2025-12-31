@@ -5,32 +5,34 @@ Document processing utilities for parsing resumes and job descriptions.
 import logging
 import os
 import re
-import json
-
 from pathlib import Path
 from urllib.parse import urlparse
 from typing_extensions import Dict, List, Any
 
 
-# Langchain imports
-from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader
+import dspy
+from langchain_community.document_loaders import PyPDFLoader, AsyncChromiumLoader
+from langchain_community.document_transformers import Html2TextTransformer
 from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
-from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
-from langchain_core.messages import SystemMessage
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
-from langchain_core.output_parsers.json import JsonOutputParser
-from langfuse.decorators import observe, langfuse_context
+from langfuse import observe
 from pydantic import BaseModel, Field
 
 # Local imports - using relative imports
 from .errors import URLExtractionError, LLMProcessingError, JobDescriptionParsingError
-from .llm_client import LLMClient
-from ..prompts.templates import JOB_DESCRIPTION_PROMPT
+from .llm_provider_factory import LLMFactory
 
 # Set up logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+llm_provider = LLMFactory()
+
+llm = llm_provider.create_langchain("qwen-3-32b",
+                                    provider="cerebras",
+                                    temperature=0.3,
+                                    )
 
 # Default paths
 DEFAULT_RESUME_PATH: str = os.getenv("DEFAULT_RESUME_PATH", "")
@@ -44,14 +46,6 @@ RESUME_SECTIONS: list[str] = [
     "AWARDS", "LANGUAGES", "INTERESTS", "REFERENCES"
 ]
 
-# Initialize LLM client
-LLM: LLMClient = LLMClient()
-
-llm_client: LLMClient = LLM.get_instance(
-                            model_name="ejschwar/llama3.2-better-prompts:latest",
-                            model_provider="ollama_json")
-llm_structured = llm_client.get_llm()
-
 
 class ResumeSection(BaseModel):
     """Model for a structured resume section."""
@@ -64,11 +58,26 @@ class StructuredResume(BaseModel):
     sections: List[ResumeSection] = Field(description="List of resume sections")
     contact_info: Dict[str, str] = Field(description="Contact information extracted from the resume")
 
+
 class JobDescriptionComponents(BaseModel):
     """Model for job description components."""
     company_name: str = Field(description="The company name")
     job_description: str = Field(description="The job description")
     reasoning: str = Field(description="The reasoning for the extracted information")
+
+
+class ExtractJobDescription(dspy.Signature):
+    """Clean and extract the job description from the provided scraped HTML of the job posting.
+    Divide the job description into multiple sections under different headings.Company Overview,
+    Role Introduction,Qualifications and Requirements, Prefrred Qualifications, Salary, Location.
+    Do not alter the content of the job description.
+    """
+    job_description_html_content = dspy.InputField(desc="HTML content of the job posting.")
+    job_description = dspy.OutputField(desc="Clean job description which is free of HTML tags and irrelevant information.")
+    job_role = dspy.OutputField(desc="The job role in the posting.")
+    company_name = dspy.OutputField(desc="Company Name of the Job listing.")
+    location = dspy.OutputField(desc="The location for the provided job posting.")
+
 
 @observe()
 def clean_resume_text(text: str) -> str:
@@ -214,7 +223,7 @@ def parse_resume(file_path: str | Path) -> List[Document]:
     (≈400 chars, 50‑char overlap) with {source, section} metadata.
     """
     file_extension = Path(file_path).suffix.lower()
-    
+
     # Handle different file types
     if file_extension == '.pdf':
         text = PyPDFLoader(str(file_path), extraction_mode="layout").load()[0].page_content
@@ -229,14 +238,14 @@ def parse_resume(file_path: str | Path) -> List[Document]:
             raise ValueError(f"Could not read text file: {file_path}. Error: {str(e)}")
     else:
         raise ValueError(f"Unsupported resume file type: {file_path}. Supported types: .pdf, .txt")
-        
+
     text = _collapse_ws(text)
 
     # Tag headings with "###" so Markdown splitter can see them
     tagged_lines = [
         f"### {ln}" if _is_heading(ln) else ln
         for ln in text.splitlines()]
-    
+
     md_text = "\n".join(tagged_lines)
 
     if "###" in md_text:
@@ -252,27 +261,25 @@ def parse_resume(file_path: str | Path) -> List[Document]:
     for doc in chunks:
         doc.metadata.setdefault("source", str(file_path))
         # section already present if header‑splitter was used
-
     return chunks
 
 
-def get_job_description(file_path_or_url: str) -> Document:
+async def get_job_description(file_path_or_url: str) -> Document:
     """Parse a job description from a file or URL into chunks.
 
     Args:
         file_path_or_url: Local file path or URL of job posting
 
     Returns:
-
         Document containing the job description
     """
     # Check if the input is a URL
     if file_path_or_url.startswith(('http://', 'https://')):
-        return parse_job_desc_from_url(file_path_or_url)
+        return await parse_job_description_from_url(file_path_or_url)
 
     # Handle local files based on extension
     file_extension = Path(file_path_or_url).suffix.lower()
-    
+
     # Handle txt files
     if file_extension == '.txt':
         try:
@@ -284,160 +291,117 @@ def get_job_description(file_path_or_url: str) -> Document:
         except Exception as e:
             logger.error(f"Error reading text file: {str(e)}")
             raise ValueError(f"Could not read text file: {file_path_or_url}. Error: {str(e)}")
-    
+
     # For other file types
     raise ValueError(f"Unsupported file type: {file_path_or_url}. Supported types: .pdf, .docx, .txt, .md")
 
 
-def parse_job_desc_from_url(url: str) -> Document:
-    """Extract job description from a URL.
+async def scrape_job_description_from_web(urls: List[str]):
+    """This function will first scrape the data from the job listing.
+    Then using the recursive splitter using the different seperators,
+    it preserves the paragraphs, lines and words"""
+    loader = AsyncChromiumLoader(urls, headless=True)
+    scraped_data_documents = await loader.aload()
+
+    html2text = Html2TextTransformer()
+    markdown_scraped_data_documents = html2text.transform_documents(scraped_data_documents)
+
+    # Grab the first 1000 tokens of the site
+    splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+        chunk_size=1000, chunk_overlap=0
+    )
+
+    extracted_content = splitter.split_documents(markdown_scraped_data_documents)
+    
+    return ".".join(doc.page_content for doc in extracted_content)
+
+
+async def parse_job_description_from_url(url: str) -> Document:
+    """Extracts and structures a job description from a URL using an LLM.
+
+    This function fetches content from a URL, uses a DSPy model to extract key details,
+    and returns a structured LangChain Document. If the LLM processing fails, it falls
+    back to returning the raw extracted text.
 
     Args:
-        url: URL of the job posting
+        url: The URL of the job posting.
 
     Returns:
-        List[str]: [job_description_markdown, company_name]
+        A Document containing the structured job description and company name in metadata.
 
     Raises:
-        ValueError: If URL format is invalid
-        URLExtractionError: If content extraction fails
-        LLMProcessingError: If LLM processing fails
+        ValueError: If the URL format is invalid.
+        JobDescriptionParsingError: For any unexpected errors during the process.
     """
-    
     logger.info("Starting job description extraction from URL: %s", url)
-    # langfuse_handler = langfuse_context.get_current_langchain_handler()
-    extracted_text = None
     
+    # 1. Validate URL first (fail fast)
+    parsed_url = urlparse(url)
+    if not all([parsed_url.scheme, parsed_url.netloc]):
+        logger.error("Invalid URL format: %s", url)
+        raise ValueError("URL must be valid and start with http:// or https://")
+
+    raw_content = None
     try:
-        # Validate URL format
-        parsed_url = urlparse(url)
-        if not all([parsed_url.scheme, parsed_url.netloc]):
-            logger.error("Invalid URL format: %s", url)
-            raise ValueError("URL must start with http:// or https://")
-
-        # Extract content from URL
+        # 2. Fetch content from the URL
         try:
-            loader = WebBaseLoader(url)
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1000,
-                chunk_overlap=200,
-                separators=["\n\n", "\n", ". ", " ", ""]
+            logger.info("Fetching content from URL...")
+            raw_content = await scrape_job_description_from_web([url])
+            if not raw_content or not raw_content.strip():
+                raise URLExtractionError("Failed to extract any meaningful content from the URL.")
+            logger.info("Successfully fetched raw content from URL.")
+        except Exception as e:
+            # Wrap any fetching error into our custom exception
+            raise URLExtractionError(f"Failed to download or read content from {url}: {e}") from e
+
+        # 3. Process content with the LLM
+        try:
+            logger.info("Processing content with DSPy LLM...")
+            # Configure DSPy LM (it's good practice to do this here if it can change)
+            dspy.configure(lm=dspy.LM(
+                "cerebras/qwen-3-32b",
+                api_key=os.environ.get("CEREBRAS_API_KEY"),
+                temperature=0.1,
+                max_tokens=60000 # Note: This max_tokens is unusually high
+            ))
+            
+            job_extract_fn = dspy.Predict(ExtractJobDescription)
+            result = job_extract_fn(job_description_html_content=raw_content)
+            logger.info("Successfully processed job description with LLM.")
+            
+            # 4. Create the final Document with structured data
+            job_doc = Document(
+                page_content=result.job_description,
+                metadata={
+                    "company_name": result.company_name,
+                    "source": url,
+                    "job_role": result.job_role,
+                    "location": result.location
+                }
             )
-            document_splitted = loader.load_and_split(text_splitter=text_splitter)
-            
-            if not document_splitted:
-                logger.error("No content could be extracted from URL: %s", url)
-                raise URLExtractionError("No content could be extracted from URL")
-            
-            extracted_text = " ".join(doc.page_content for doc in document_splitted)
-            logger.info("Successfully extracted %d characters from URL", len(extracted_text))
-            
-        except Exception as e:
-            raise URLExtractionError(f"Failed to extract content from URL: {str(e)}") from e
-
-        # Process with LLM
-        if not llm_structured:
-            logger.warning("LLM not available, returning raw extracted text")
-            return [extracted_text, "Unknown Company"]
-
-        try:
-            output_parser: JsonOutputParser = JsonOutputParser(pydantic_object=JobDescriptionComponents)
-
-            human_prompt = "Below is the job description enclosed in triple quotes:\n\n '''{extracted_text}'''\n\n"
-            
-            job_description_parser_system_message = SystemMessagePromptTemplate.from_template(
-                                                    template=JOB_DESCRIPTION_PROMPT,
-                                                    input_variables=[])
-            job_description_parser_human_message = HumanMessagePromptTemplate.from_template(
-                                                    template=human_prompt,
-                                                    input_variables=["extracted_text"])
-            chat_prompt = ChatPromptTemplate.from_messages([job_description_parser_system_message, job_description_parser_human_message])
-
-            # print("Chat prompt created successfully")
-            chain = chat_prompt | llm_structured | output_parser
-            
-            try:
-                # Process with LLM
-
-                try:
-                    result = chain.invoke({"extracted_text": extracted_text})
-                except Exception as e:
-                    logger.error("LLM invocation failed: %s", str(e))
-                    raise LLMProcessingError(f"LLM invocation failed: {str(e)}") from e
-                print("LLM processing result: ", result)
-                # Handle different types of LLM results
-                if isinstance(result, JobDescriptionComponents):
-                    # Direct Pydantic model
-                    result = result.model_dump()
-                if isinstance(result, dict):
-                    print("LLM returned a dictionary, converting to JobDescriptionComponents model", result)
-                else:
-                    # Unexpected result type
-                    print(f"Unexpected LLM result type: {type(result)}")
-                    logger.error("Unexpected LLM result type: %s", type(result))
-                    raise LLMProcessingError("Invalid LLM response format")
-
-                # Validate required fields
-                if not result.get("job_description") or not result.get("company_name"):
-                    logger.warning("LLM returned empty required fields")
-                    raise LLMProcessingError("Missing required fields in LLM response")
-
-                logger.info("Successfully processed job description with LLM")
-                # Create a Document object for the job description
-                job_doc = Document(
-                    page_content=result["job_description"],
-                    metadata={"company_name": result["company_name"]}
-                )
-
-                # print("Job description Document created successfully. Company name: ", result["company_name"])
-                # print("Job description content: ", job_doc.metadata)  # Print first 100 chars for debugging
-                return job_doc
-            
-            except Exception as e:
-                # Handle LLM processing errors first
-                if isinstance(e, LLMProcessingError):
-                    raise
-                
-                # Try to recover from JSON parsing errors
-                error_msg = str(e)
-                if "Invalid json output" in error_msg:
-                    logger.warning("Attempting to recover from invalid JSON output")
-                    
-                    # Extract JSON from error message
-                    output = error_msg.split("Invalid json output:", 1)[1].strip()
-                    start = output.find('{')
-                    end = output.rfind('}') + 1
-                    
-                    if start >= 0 and end > start:
-                        try:
-                            clean_json = output[start:end]
-                            result = output_parser.parse(clean_json)
-                            if hasattr(result, "job_description") and hasattr(result, "company_name"):
-                                return [result.job_description, result.company_name]
-                        except json.JSONDecodeError as json_e:
-                            logger.error("Failed to recover from JSON error: %s", json_e)
-                
-                raise LLMProcessingError(f"Failed to process job description with LLM: {str(e)}") from e
+            return job_doc
 
         except Exception as e:
-            if isinstance(e, LLMProcessingError):
-                if extracted_text:
-                    logger.warning("LLM processing failed, falling back to raw text")
-                    raise e
-                    return [extracted_text, "Unknown Company"]
-            raise LLMProcessingError(f"Failed to process job description with LLM: {str(e)}") from e
+            # Wrap any LLM error into our custom exception
+            raise LLMProcessingError(f"Failed to process content with LLM: {e}") from e
 
-    except ValueError as e:
-        logger.error("URL validation error: %s", str(e))
-        raise
-    except URLExtractionError as e:
-        logger.error("Content extraction error: %s", str(e))
-        raise
+    # 5. Handle specific, known errors
     except LLMProcessingError as e:
-        if extracted_text:
-            logger.warning("Using extracted text as fallback")
-            return [extracted_text, "Unknown Company"]
-        raise
+        logger.warning(f"LLM processing failed: {e}. Falling back to raw text.")
+        # This is the corrected fallback logic. It uses the fetched `raw_content`.
+        if raw_content:
+            return Document(
+                page_content=raw_content,
+                metadata={"company_name": "Unknown", "source": url, "error": str(e)}
+            )
+        # If raw_content is also None, then the failure was catastrophic.
+        raise LLMProcessingError("LLM processing failed and no raw content was available for fallback.") from e
+        
+    except URLExtractionError as e:
+        logger.error(f"Could not extract content from URL: {e}")
+        raise URLExtractionError("Failed to extract content from the URL.") from e
+
+    # 6. Catch any other unexpected errors
     except Exception as e:
-        logger.error("Unexpected error during job description parsing: %s", str(e))
-        raise JobDescriptionParsingError(f"Failed to parse job description: {str(e)}") from e
+        logger.error(f"An unexpected error occurred: {e}", exc_info=True)
+        raise JobDescriptionParsingError(f"An unexpected error occurred while parsing the job description: {e}") from e
