@@ -1,0 +1,10 @@
+{
+  "dependencies": [
+    "nodes"
+  ],
+  "graphs": {
+    "research_workflow": "./src/job_writing_agent/nodes/research_workflow.py:research_workflow"
+  },
+  "env": "./job_writer_env",
+  "python_version": "3.12"
+}
