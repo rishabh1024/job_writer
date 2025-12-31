@@ -33,3 +33,7 @@ __pycache__/
 *.py[cod]
 *.pyc
 
+# Git backup
+src/.git_backup
+src/job_writing_agent.egg-info/*
+
