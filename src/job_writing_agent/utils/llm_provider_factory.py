@@ -10,6 +10,7 @@ from .llm_client import (
     OllamaChatProvider,
     OpenRouterChatProvider,
 )
+from .logging.logging_decorators import log_execution
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ class LLMFactory:
         >>> dspy.configure(lm=lm)
     """
 
+    @log_execution
     def __init__(self, default_provider: str = "openrouter"):
         """Initialize factory with available providers.
 
@@ -50,6 +52,7 @@ class LLMFactory:
             f"default: {default_provider}"
         )
 
+    @log_execution
     def create(
         self,
         model: str,

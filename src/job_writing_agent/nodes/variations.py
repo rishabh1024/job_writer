@@ -5,7 +5,7 @@ from typing_extensions import Dict, List
 from langchain_core.documents import Document
 
 
-from ..classes.classes import AppState
+from ..classes.classes import ResultState
 from ..utils.llm_provider_factory import LLMFactory
 from ..prompts.templates import VARIATION_PROMPT
 
@@ -14,15 +14,15 @@ logger = logging.getLogger(__name__)
 # Constants
 CURRENT_DATE = datetime.now().strftime("%A, %B %d, %Y")
 
-llm_provider = LLMFactory()
 
-llm = llm_provider.create_langchain(
-    "qwen/qwen3-4b:free", provider="openrouter", temperature=0.3
-)
-
-
-def generate_variations(state: AppState) -> Dict[str, List[str]]:
+def generate_variations(state: ResultState) -> Dict[str, List[str]]:
     """Generate multiple variations of the draft for self-consistency voting."""
+    # Create LLM inside function (lazy initialization)
+    llm_provider = LLMFactory()
+    llm = llm_provider.create_langchain(
+        "google/gemma-3-27b-it:free", provider="openrouter", temperature=0.3
+    )
+
     variations = []
 
     # Get resume and job text, handling both string and Document types
@@ -69,6 +69,8 @@ def generate_variations(state: AppState) -> Dict[str, List[str]]:
             )
 
             response = configured_llm.invoke(variation)
+
+            print(f"Response for setting:  {variation} has a response: {response}")
 
             if response and response.strip():  # Only add non-empty variations
                 variations.append(response)

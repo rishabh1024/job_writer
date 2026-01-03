@@ -13,26 +13,20 @@ from typing_extensions import Dict, List, Any
 import dspy
 from langchain_community.document_loaders import PyPDFLoader, AsyncChromiumLoader
 from langchain_community.document_transformers import Html2TextTransformer
-from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import (
+    RecursiveCharacterTextSplitter,
+    MarkdownHeaderTextSplitter,
+)
 from langchain_core.documents import Document
 from langfuse import observe
 from pydantic import BaseModel, Field
 
 # Local imports - using relative imports
 from .errors import URLExtractionError, LLMProcessingError, JobDescriptionParsingError
-from .llm_provider_factory import LLMFactory
 
 # Set up logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
-
-llm_provider = LLMFactory()
-
-llm = llm_provider.create_langchain("qwen-3-32b",
-                                    provider="cerebras",
-                                    temperature=0.3,
-                                    )
 
 # Default paths
 DEFAULT_RESUME_PATH: str = os.getenv("DEFAULT_RESUME_PATH", "")
@@ -40,27 +34,45 @@ DEFAULT_RESUME_PATH: str = os.getenv("DEFAULT_RESUME_PATH", "")
 
 # Most Occurring Resume Section Headers
 RESUME_SECTIONS: list[str] = [
-    "EDUCATION", "EXPERIENCE", "SKILLS", "WORK EXPERIENCE",
-    "PROFESSIONAL EXPERIENCE", "PROJECTS", "CERTIFICATIONS",
-    "SUMMARY", "OBJECTIVE", "CONTACT", "PUBLICATIONS",
-    "AWARDS", "LANGUAGES", "INTERESTS", "REFERENCES"
+    "EDUCATION",
+    "EXPERIENCE",
+    "SKILLS",
+    "WORK EXPERIENCE",
+    "PROFESSIONAL EXPERIENCE",
+    "PROJECTS",
+    "CERTIFICATIONS",
+    "SUMMARY",
+    "OBJECTIVE",
+    "CONTACT",
+    "PUBLICATIONS",
+    "AWARDS",
+    "LANGUAGES",
+    "INTERESTS",
+    "REFERENCES",
 ]
 
 
 class ResumeSection(BaseModel):
     """Model for a structured resume section."""
-    title: str = Field(description="The section title (e.g., 'Experience', 'Education')")
+
+    title: str = Field(
+        description="The section title (e.g., 'Experience', 'Education')"
+    )
     content: str = Field(description="The full content of this section")
 
 
 class StructuredResume(BaseModel):
     """Model for a structured resume with sections."""
+
     sections: List[ResumeSection] = Field(description="List of resume sections")
-    contact_info: Dict[str, str] = Field(description="Contact information extracted from the resume")
+    contact_info: Dict[str, str] = Field(
+        description="Contact information extracted from the resume"
+    )
 
 
 class JobDescriptionComponents(BaseModel):
     """Model for job description components."""
+
     company_name: str = Field(description="The company name")
     job_description: str = Field(description="The job description")
     reasoning: str = Field(description="The reasoning for the extracted information")
@@ -72,8 +84,13 @@ class ExtractJobDescription(dspy.Signature):
     Role Introduction,Qualifications and Requirements, Prefrred Qualifications, Salary, Location.
     Do not alter the content of the job description.
     """
-    job_description_html_content = dspy.InputField(desc="HTML content of the job posting.")
-    job_description = dspy.OutputField(desc="Clean job description which is free of HTML tags and irrelevant information.")
+
+    job_description_html_content = dspy.InputField(
+        desc="HTML content of the job posting."
+    )
+    job_description = dspy.OutputField(
+        desc="Clean job description which is free of HTML tags and irrelevant information."
+    )
     job_role = dspy.OutputField(desc="The job role in the posting.")
     company_name = dspy.OutputField(desc="Company Name of the Job listing.")
     location = dspy.OutputField(desc="The location for the provided job posting.")
@@ -90,18 +107,19 @@ def clean_resume_text(text: str) -> str:
         Cleaned text
     """
     # Remove excessive whitespace
-    text = re.sub(r'\s+', ' ', text)
+    text = re.sub(r"\s+", " ", text)
 
     # Fix common PDF extraction issues
-    text = re.sub(r'([a-z])- ([a-z])', r'\1\2', text)  # Fix hyphenated words
+    text = re.sub(r"([a-z])- ([a-z])", r"\1\2", text)  # Fix hyphenated words
 
     # Remove header/footer page numbers
-    text = re.sub(r'\n\s*\d+\s*\n', '\n', text)
+    text = re.sub(r"\n\s*\d+\s*\n", "\n", text)
 
     # Replace bullet variations with standard markdown bullets
-    text = re.sub(r'[•●○◘◙♦♣♠★]', '* ', text)
+    text = re.sub(r"[•●○◘◙♦♣♠★]", "* ", text)
 
     return text.strip()
+
 
 @observe()
 def extract_contact_info(text: str) -> Dict[str, str]:
@@ -116,27 +134,32 @@ def extract_contact_info(text: str) -> Dict[str, str]:
     contact_info = {}
 
     # Extract email
-    email_match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', text)
+    email_match = re.search(
+        r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", text
+    )
     if email_match:
-        contact_info['email'] = email_match.group(0)
+        contact_info["email"] = email_match.group(0)
 
     # Extract phone (various formats)
-    phone_match = re.search(r'(\+\d{1,3}[-.\s]?)?(\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}', text)
+    phone_match = re.search(
+        r"(\+\d{1,3}[-.\s]?)?(\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}", text
+    )
     if phone_match:
-        contact_info['phone'] = phone_match.group(0)
+        contact_info["phone"] = phone_match.group(0)
 
     # Extract LinkedIn URL
-    linkedin_match = re.search(r'linkedin\.com/in/[a-zA-Z0-9_-]+/?', text)
+    linkedin_match = re.search(r"linkedin\.com/in/[a-zA-Z0-9_-]+/?", text)
     if linkedin_match:
-        contact_info['linkedin'] = 'https://www.' + linkedin_match.group(0)
+        contact_info["linkedin"] = "https://www." + linkedin_match.group(0)
 
     # Try to extract name (this is approximate and might need LLM for better accuracy)
     # Typically name appears at the top of the resume
-    first_line = text.strip().split('\n')[0].strip()
+    first_line = text.strip().split("\n")[0].strip()
     if len(first_line) < 40 and not any(char.isdigit() for char in first_line):
-        contact_info['name'] = first_line
+        contact_info["name"] = first_line
 
     return contact_info
+
 
 @observe()
 def identify_resume_sections(text: str) -> List[Dict[str, Any]]:
@@ -174,15 +197,21 @@ def identify_resume_sections(text: str) -> List[Dict[str, Any]]:
 
     # Regex-based section identification
     # Create a pattern that matches common section headers
-    section_pattern = r'(?:^|\n)(?:[^a-zA-Z\d\s]|\s)*(' + '|'.join(RESUME_SECTIONS) + r')(?:[^a-zA-Z\d\s]|\s)*(?:$|\n)'
+    section_pattern = (
+        r"(?:^|\n)(?:[^a-zA-Z\d\s]|\s)*("
+        + "|".join(RESUME_SECTIONS)
+        + r")(?:[^a-zA-Z\d\s]|\s)*(?:$|\n)"
+    )
     matches = list(re.finditer(section_pattern, text, re.IGNORECASE))
 
     if not matches:
         # If no sections found, treat the whole resume as one section
-        sections.append({
-            "title": "resume",
-            "content": text,
-        })
+        sections.append(
+            {
+                "title": "resume",
+                "content": text,
+            }
+        )
         return sections
 
     # Process each section
@@ -191,15 +220,12 @@ def identify_resume_sections(text: str) -> List[Dict[str, Any]]:
         start_pos = match.start()
 
         # Find the end position (start of next section or end of text)
-        end_pos = matches[i+1].start() if i < len(matches) - 1 else len(text)
+        end_pos = matches[i + 1].start() if i < len(matches) - 1 else len(text)
 
         # Extract section content (excluding the header)
         section_content = text[start_pos:end_pos].strip()
 
-        sections.append({
-            "title": section_title.lower(),
-            "content": section_content
-        })
+        sections.append({"title": section_title.lower(), "content": section_content})
 
     return sections
 
@@ -211,11 +237,8 @@ def _collapse_ws(text: str) -> str:
 
 
 def _is_heading(line: str) -> bool:
-    return (
-        line.isupper()
-        and len(line.split()) <= 5
-        and not re.search(r"\d", line)
-    )
+    return line.isupper() and len(line.split()) <= 5 and not re.search(r"\d", line)
+
 
 def parse_resume(file_path: str | Path) -> List[Document]:
     """
@@ -225,11 +248,13 @@ def parse_resume(file_path: str | Path) -> List[Document]:
     file_extension = Path(file_path).suffix.lower()
 
     # Handle different file types
-    if file_extension == '.pdf':
-        text = PyPDFLoader(str(file_path), extraction_mode="layout").load()[0].page_content
-    elif file_extension == '.txt':
+    if file_extension == ".pdf":
+        text = (
+            PyPDFLoader(str(file_path), extraction_mode="layout").load()[0].page_content
+        )
+    elif file_extension == ".txt":
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 text = f.read()
                 if not text.strip():
                     raise ValueError("File is empty")
@@ -237,27 +262,26 @@ def parse_resume(file_path: str | Path) -> List[Document]:
             logger.error(f"Error reading text file: {str(e)}")
             raise ValueError(f"Could not read text file: {file_path}. Error: {str(e)}")
     else:
-        raise ValueError(f"Unsupported resume file type: {file_path}. Supported types: .pdf, .txt")
+        raise ValueError(
+            f"Unsupported resume file type: {file_path}. Supported types: .pdf, .txt"
+        )
 
     text = _collapse_ws(text)
 
     # Tag headings with "###" so Markdown splitter can see them
-    tagged_lines = [
-        f"### {ln}" if _is_heading(ln) else ln
-        for ln in text.splitlines()]
+    tagged_lines = [f"### {ln}" if _is_heading(ln) else ln for ln in text.splitlines()]
 
     md_text = "\n".join(tagged_lines)
 
     if "###" in md_text:
-        splitter = MarkdownHeaderTextSplitter(
-            headers_to_split_on=[("###", "section")]
-        )
+        splitter = MarkdownHeaderTextSplitter(headers_to_split_on=[("###", "section")])
         chunks = splitter.split_text(md_text)  # already returns Documents
     else:
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=400, chunk_overlap=50
-        )
-        chunks: list[Document] = [Document(page_content=chunk, metadata={}) for chunk in splitter.split_text(md_text)]    # Attach metadata
+        splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=50)
+        chunks: list[Document] = [
+            Document(page_content=chunk, metadata={})
+            for chunk in splitter.split_text(md_text)
+        ]  # Attach metadata
     for doc in chunks:
         doc.metadata.setdefault("source", str(file_path))
         # section already present if header‑splitter was used
@@ -274,26 +298,32 @@ async def get_job_description(file_path_or_url: str) -> Document:
         Document containing the job description
     """
     # Check if the input is a URL
-    if file_path_or_url.startswith(('http://', 'https://')):
+    if file_path_or_url.startswith(("http://", "https://")):
         return await parse_job_description_from_url(file_path_or_url)
 
     # Handle local files based on extension
     file_extension = Path(file_path_or_url).suffix.lower()
 
     # Handle txt files
-    if file_extension == '.txt':
+    if file_extension == ".txt":
         try:
-            with open(file_path_or_url, 'r', encoding='utf-8') as f:
+            with open(file_path_or_url, "r", encoding="utf-8") as f:
                 content = f.read()
                 if not content.strip():
                     raise ValueError(f"File is empty: {file_path_or_url}")
-                return Document(page_content=content, metadata={"source": file_path_or_url})
+                return Document(
+                    page_content=content, metadata={"source": file_path_or_url}
+                )
         except Exception as e:
             logger.error(f"Error reading text file: {str(e)}")
-            raise ValueError(f"Could not read text file: {file_path_or_url}. Error: {str(e)}")
+            raise ValueError(
+                f"Could not read text file: {file_path_or_url}. Error: {str(e)}"
+            )
 
     # For other file types
-    raise ValueError(f"Unsupported file type: {file_path_or_url}. Supported types: .pdf, .docx, .txt, .md")
+    raise ValueError(
+        f"Unsupported file type: {file_path_or_url}. Supported types: .pdf, .docx, .txt, .md"
+    )
 
 
 async def scrape_job_description_from_web(urls: List[str]):
@@ -304,7 +334,9 @@ async def scrape_job_description_from_web(urls: List[str]):
     scraped_data_documents = await loader.aload()
 
     html2text = Html2TextTransformer()
-    markdown_scraped_data_documents = html2text.transform_documents(scraped_data_documents)
+    markdown_scraped_data_documents = html2text.transform_documents(
+        scraped_data_documents
+    )
 
     # Grab the first 1000 tokens of the site
     splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
@@ -312,14 +344,14 @@ async def scrape_job_description_from_web(urls: List[str]):
     )
 
     extracted_content = splitter.split_documents(markdown_scraped_data_documents)
-    
+
     return ".".join(doc.page_content for doc in extracted_content)
 
 
 async def parse_job_description_from_url(url: str) -> Document:
     """Extracts and structures a job description from a URL using an LLM.
 
-    This function fetches content from a URL, uses a DSPy model to extract key details,
+    This function fetches content from a URL, uses a DSPy to extract key details,
     and returns a structured LangChain Document. If the LLM processing fails, it falls
     back to returning the raw extracted text.
 
@@ -334,8 +366,8 @@ async def parse_job_description_from_url(url: str) -> Document:
         JobDescriptionParsingError: For any unexpected errors during the process.
     """
     logger.info("Starting job description extraction from URL: %s", url)
-    
-    # 1. Validate URL first (fail fast)
+
+    # 1. Validate URL
     parsed_url = urlparse(url)
     if not all([parsed_url.scheme, parsed_url.netloc]):
         logger.error("Invalid URL format: %s", url)
@@ -348,27 +380,33 @@ async def parse_job_description_from_url(url: str) -> Document:
             logger.info("Fetching content from URL...")
             raw_content = await scrape_job_description_from_web([url])
             if not raw_content or not raw_content.strip():
-                raise URLExtractionError("Failed to extract any meaningful content from the URL.")
+                raise URLExtractionError(
+                    "Failed to extract any meaningful content from the URL."
+                )
             logger.info("Successfully fetched raw content from URL.")
         except Exception as e:
             # Wrap any fetching error into our custom exception
-            raise URLExtractionError(f"Failed to download or read content from {url}: {e}") from e
+            raise URLExtractionError(
+                f"Failed to download or read content from {url}: {e}"
+            ) from e
 
         # 3. Process content with the LLM
         try:
             logger.info("Processing content with DSPy LLM...")
             # Configure DSPy LM (it's good practice to do this here if it can change)
-            dspy.configure(lm=dspy.LM(
-                "cerebras/qwen-3-32b",
-                api_key=os.environ.get("CEREBRAS_API_KEY"),
-                temperature=0.1,
-                max_tokens=60000 # Note: This max_tokens is unusually high
-            ))
-            
+            dspy.configure(
+                lm=dspy.LM(
+                    "cerebras/qwen-3-32b",
+                    api_key=os.environ.get("CEREBRAS_API_KEY"),
+                    temperature=0.1,
+                    max_tokens=60000,  # Note: This max_tokens is unusually high
+                )
+            )
+
             job_extract_fn = dspy.Predict(ExtractJobDescription)
             result = job_extract_fn(job_description_html_content=raw_content)
             logger.info("Successfully processed job description with LLM.")
-            
+
             # 4. Create the final Document with structured data
             job_doc = Document(
                 page_content=result.job_description,
@@ -376,8 +414,8 @@ async def parse_job_description_from_url(url: str) -> Document:
                     "company_name": result.company_name,
                     "source": url,
                     "job_role": result.job_role,
-                    "location": result.location
-                }
+                    "location": result.location,
+                },
             )
             return job_doc
 
@@ -392,11 +430,13 @@ async def parse_job_description_from_url(url: str) -> Document:
         if raw_content:
             return Document(
                 page_content=raw_content,
-                metadata={"company_name": "Unknown", "source": url, "error": str(e)}
+                metadata={"company_name": "Unknown", "source": url, "error": str(e)},
             )
         # If raw_content is also None, then the failure was catastrophic.
-        raise LLMProcessingError("LLM processing failed and no raw content was available for fallback.") from e
-        
+        raise LLMProcessingError(
+            "LLM processing failed and no raw content was available for fallback."
+        ) from e
+
     except URLExtractionError as e:
         logger.error(f"Could not extract content from URL: {e}")
         raise URLExtractionError("Failed to extract content from the URL.") from e
@@ -404,4 +444,6 @@ async def parse_job_description_from_url(url: str) -> Document:
     # 6. Catch any other unexpected errors
     except Exception as e:
         logger.error(f"An unexpected error occurred: {e}", exc_info=True)
-        raise JobDescriptionParsingError(f"An unexpected error occurred while parsing the job description: {e}") from e
+        raise JobDescriptionParsingError(
+            f"An unexpected error occurred while parsing the job description: {e}"
+        ) from e

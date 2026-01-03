@@ -1,10 +1,12 @@
 {
   "dependencies": [
-    "nodes"
+    "."
   ],
   "graphs": {
-    "research_workflow": "./src/job_writing_agent/nodes/research_workflow.py:research_workflow"
+    "job_app_graph": "./src/job_writing_agent/workflow.py:job_app_graph",
+    "research_workflow": "./src/job_writing_agent/nodes/research_workflow.py:research_workflow",
+    "data_loading_workflow": "./src/job_writing_agent/nodes/initializing.py:data_loading_workflow"
   },
-  "env": "./job_writer_env",
+  "env": "./app_env",
   "python_version": "3.12"
 }
