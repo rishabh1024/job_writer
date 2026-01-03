@@ -1,12 +1,12 @@
 import argparse
 import os
-from typing import Optional, Any, Iterable
+from typing import Iterable
 
 import requests
 from requests.exceptions import RequestException
 
 
-DEFAULT_MODEL = "qwen/qwen3-4b:free"
+DEFAULT_MODEL = "mistralai/mistral-7b-instruct:free"
 DEFAULT_CONTENT_TYPE = "cover_letter"
 
 

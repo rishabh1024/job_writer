@@ -4,6 +4,8 @@
 # Environment / secret files
 job_writing_agent/.env
 job_writing_agent/.env.*
+src/job_writing_agent/.env
+src/job_writing_agent/.env.*
 
 # Jupyter notebooks
 job_writing_agent/*.ipynb

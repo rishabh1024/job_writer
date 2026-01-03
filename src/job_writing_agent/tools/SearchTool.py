@@ -6,37 +6,40 @@ from pathlib import Path
 
 from langchain_tavily import TavilySearch
 from openevals.llm import create_async_llm_as_judge
-from openevals.prompts import (
-    RAG_RETRIEVAL_RELEVANCE_PROMPT,
-    RAG_HELPFULNESS_PROMPT
-)
+from openevals.prompts import RAG_RETRIEVAL_RELEVANCE_PROMPT, RAG_HELPFULNESS_PROMPT
 import dspy
 
 from ..agents.output_schema import TavilySearchQueries
 from ..classes.classes import ResearchState
 from ..utils.llm_provider_factory import LLMFactory
 
+
 logger = logging.getLogger(__name__)
 
 
-env_path = Path(__file__).parent / '.env'
+env_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=env_path, override=True)
 
 
 openrouter_api_key = os.environ["OPENROUTER_API_KEY"]
 
-llm_provider = LLMFactory()
-
 
 class TavilyResearchTool:
-
-    def __init__(self, job_description, company_name, max_results=5, model_name="qwen/qwen3-4b:free"):
-        self.dspy_llm = llm_provider.create_dspy(model=model_name,
-                                                 provider="openrouter",
-                                                 temperature=0.3)
+    def __init__(
+        self,
+        job_description,
+        company_name,
+        max_results=5,
+        model_name="mistralai/mistral-7b-instruct:free",
+    ):
+        # Create LLM inside __init__ (lazy initialization)
+        llm_provider = LLMFactory()
+        self.dspy_llm = llm_provider.create_dspy(
+            model=model_name, provider="openrouter", temperature=0.3
+        )
         self.job_description = job_description
         self.company_name = company_name
-        self.tavily_searchtool  = TavilySearch(max_results=max_results)
+        self.tavily_searchtool = TavilySearch(max_results=max_results)
 
     def create_tavily_queries(self):
         """
@@ -46,101 +49,222 @@ class TavilyResearchTool:
         """
         tavily_query_generator = dspy.ChainOfThought(TavilySearchQueries)
         with dspy.context(lm=self.dspy_llm, adapter=dspy.JSONAdapter()):
-            response = tavily_query_generator(job_description=self.job_description, company_name=self.company_name)
+            response = tavily_query_generator(
+                job_description=self.job_description, company_name=self.company_name
+            )
             return response
 
-
     def tavily_search_company(self, queries):
-        
         query_results: list[list[str]] = []
         for query in queries:
             try:
-                search_query_response = self.tavily_searchtool.invoke({"query": queries[query]})
-                query_results.append([res['content'] for res in search_query_response['results']])
+                search_query_response = self.tavily_searchtool.invoke(
+                    {"query": queries[query]}
+                )
+                query_results.append(
+                    [res["content"] for res in search_query_response["results"]]
+                )
                 # print(f"Tavily Search Tool Response for query '{search_query_response['query']}': {query_results_map[search_query_response['query']]}")
             except Exception as e:
-                logger.error(f"Failed to perform company research using TavilySearchTool. Error : {e}")
+                logger.error(
+                    f"Failed to perform company research using TavilySearchTool. Error : {e}"
+                )
                 continue
 
         return query_results
 
-llm_structured = llm_provider.create_langchain("llama3.1-8b",
-                                                 provider="cerebras",
-                                                 temperature=0.3)
 
 def get_relevance_evaluator():
+    """
+    Create an LLM-as-judge evaluator for relevance filtering.
+
+    Creates the LLM on-demand (lazy initialization) to avoid startup delays.
+    """
+    # Create LLM inside function (lazy initialization)
+    llm_provider = LLMFactory()
+    llm_structured = llm_provider.create_langchain(
+        "llama3.1-8b", provider="cerebras", temperature=0.3
+    )
     return create_async_llm_as_judge(
-                                    judge=llm_structured,
-                                    prompt=RAG_RETRIEVAL_RELEVANCE_PROMPT,
-                                    feedback_key="retrieval_relevance",
-                                    )
+        judge=llm_structured,
+        prompt=RAG_RETRIEVAL_RELEVANCE_PROMPT,
+        feedback_key="retrieval_relevance",
+    )
 
 
 def get_helpfulness_evaluator():
+    """
+    Create an LLM-as-judge evaluator for helpfulness filtering.
+
+    Creates the LLM on-demand (lazy initialization) to avoid startup delays.
+    """
+    # Create LLM inside function (lazy initialization)
+    llm_provider = LLMFactory()
+    llm_structured = llm_provider.create_langchain(
+        "llama3.1-8b", provider="cerebras", temperature=0.3
+    )
     return create_async_llm_as_judge(
-                                    judge=llm_structured,
-                                    prompt=RAG_HELPFULNESS_PROMPT
-                                    + '\nReturn "true" if the answer is helpful, and "false" otherwise.',
-                                    feedback_key="helpfulness",
-                                    )
+        judge=llm_structured,
+        prompt=RAG_HELPFULNESS_PROMPT
+        + '\nReturn "true" if the answer is helpful, and "false" otherwise.',
+        feedback_key="helpfulness",
+    )
 
 
-async def relevance_filter(state: ResearchState) -> ResearchState:
+async def filter_research_results_by_relevance(state: ResearchState) -> ResearchState:
+    """
+    Filter search results to keep only relevant company information.
+    Uses LLM-as-judge to evaluate if each result set is relevant to its query.
+    Irrelevant results are REMOVED from the final output.
+    """
     try:
-        # Set the current node
-        state["current_node"] = "relevance_filter"
+        state["current_node"] = "filter_research_results_by_relevance"
 
-        # Get the all_query_data and attempted_queries_list
-        tavily_search_results = state["company_research_data"]["tavily_search"]
-        attempted_tavily_query_list = state["attempted_search_queries"]
+        # Extract search data from state
+        raw_search_results = state.get("company_research_data", {}).get(
+            "tavily_search", []
+        )
+        search_queries_used = state.get("attempted_search_queries", [])
 
-        # Check if all_query_data and attempted_queries_list are lists
-        assert isinstance(tavily_search_results, list), "tavily_search_results is not a list"
-        assert isinstance(attempted_tavily_query_list, list), "attempted_tavily_query_list is not a list"
+        # Validate data types
+        if not isinstance(raw_search_results, list):
+            logger.warning(f"Invalid search results type: {type(raw_search_results)}")
+            return state
 
-        print("Filtering results...")
+        if not isinstance(search_queries_used, list):
+            logger.warning(f"Invalid queries type: {type(search_queries_used)}")
+            search_queries_used = []
 
-        filtered_search_results = []  # Stores results deemed relevant in this specific call
+        # Early exit if no results
+        if len(raw_search_results) == 0:
+            logger.info("No search results to filter.")
+            state["company_research_data"]["tavily_search"] = []
+            return state
 
-        # Create a semaphore to limit concurrent tasks to 2
-        semaphore = asyncio.Semaphore(2)
+        logger.info(
+            f"Starting relevance filtering for {len(raw_search_results)} result sets..."
+        )
 
-        async def evaluate_with_semaphore(query_result_item, input_query: str):
-            # query_result_item is a dict like {'rationale': '...', 'results': [...]}
-            async with semaphore:
-                relevance_evaluator = get_relevance_evaluator()
-                eval_result = await relevance_evaluator(
-                    inputs=input_query, context=query_result_item  # context is the whole result block for the query
+        # Track filtering statistics
+        results_kept = []
+        results_removed_count = 0
+        evaluation_errors_count = 0
+
+        # Limit concurrent evaluations to prevent rate limiting
+        concurrency_limiter = asyncio.Semaphore(2)
+
+        async def evaluate_result_set_relevance(
+            search_result_content, original_query: str
+        ):
+            """
+            Evaluate if a search result set is relevant to its query.
+
+            Returns:
+                tuple: (search_result_content, is_relevant: bool, error: str|None)
+            """
+            async with concurrency_limiter:
+                try:
+                    # Skip empty result sets
+                    if not search_result_content:
+                        logger.debug(
+                            f"Skipping empty result set for query: {original_query[:50]}..."
+                        )
+                        return (None, False, "empty")
+
+                    # Create relevance evaluator
+                    llm_relevance_judge = get_relevance_evaluator()
+
+                    # Evaluate with timeout protection
+                    evaluation_task = llm_relevance_judge(
+                        inputs=original_query, context=search_result_content
+                    )
+
+                    evaluation_result = await asyncio.wait_for(
+                        evaluation_task, timeout=15
+                    )
+
+                    # Extract relevance score (True = relevant, False = not relevant)
+                    is_result_relevant = bool(evaluation_result.get("score", False))
+
+                    if is_result_relevant:
+                        logger.debug(
+                            f"KEPT: Result relevant for query: {original_query[:60]}..."
+                        )
+                        return (search_result_content, True, None)
+                    else:
+                        logger.debug(
+                            f"REMOVED: Result not relevant for query: {original_query[:60]}..."
+                        )
+                        return (None, False, None)
+
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        f"Evaluation timed out for query: {original_query[:60]}... (KEEPING result)"
+                    )
+                    return (search_result_content, True, "timeout")
+
+                except Exception as e:
+                    logger.error(
+                        f"Evaluation failed for query: {original_query[:60]}... - {e} (KEEPING result)"
+                    )
+                    return (search_result_content, True, f"error:{str(e)}")
+
+        # Create evaluation tasks for all result sets
+        evaluation_tasks = []
+        for result_set, query in zip(raw_search_results, search_queries_used):
+            task = evaluate_result_set_relevance(result_set, query)
+            evaluation_tasks.append(task)
+
+        # Execute all evaluations concurrently
+        all_evaluation_results = await asyncio.gather(
+            *evaluation_tasks, return_exceptions=True
+        )
+
+        # Process evaluation results and separate kept vs removed
+        for eval_result in all_evaluation_results:
+            # Handle exceptions from gather
+            if isinstance(eval_result, Exception):
+                logger.error(f"Evaluation task failed with exception: {eval_result}")
+                evaluation_errors_count += 1
+                continue
+
+            # Type guard: eval_result is now guaranteed to be a tuple
+            if not isinstance(eval_result, tuple) or len(eval_result) != 3:
+                logger.error(
+                    f"Unexpected evaluation result format: {type(eval_result)}"
                 )
-                return query_result_item, eval_result
+                evaluation_errors_count += 1
+                continue
 
-        # Create tasks for all results
-        tasks: list = []
+            result_content, is_relevant, error = eval_result
 
-        for query_result, attempted_query in zip(tavily_search_results, attempted_tavily_query_list):
-            tasks.append(evaluate_with_semaphore(query_result, attempted_query))
-        # Process tasks as they complete
-        for completed_task in asyncio.as_completed(tasks):
-            query_result_item, eval_result = await completed_task
-            # logger.info(f"Evaluated query result for '{query_result_item}': {eval_result}")
-            if eval_result.get("score"):  # Safely check for score
-                if isinstance(query_result_item, list):
-                    filtered_search_results.extend(query_result_item)
-                else:
-                    # Handle cases where "results" might not be a list or is missing
-                    logger.warning("Expected a list in query_result_item, got: %s", type(query_result_item))
+            # Track errors
+            if error:
+                evaluation_errors_count += 1
 
-        # Append the newly filtered results to the main compiled_results list
-        state["company_research_data"]["tavily_search"] = filtered_search_results
+            # Keep relevant results, discard irrelevant ones
+            if result_content is not None and is_relevant:
+                results_kept.append(result_content)
+            else:
+                results_removed_count += 1
 
-        logger.info(f"Relevance filtering completed. {len(filtered_search_results)} relevant results found.")
+        # Update state with ONLY the relevant results
+        state["company_research_data"]["tavily_search"] = results_kept
+
+        # Log filtering summary
+        total_evaluated = len(raw_search_results)
+        kept_count = len(results_kept)
+        removed_count = results_removed_count
+
+        logger.info(
+            f"Relevance filtering complete: "
+            f"KEPT {kept_count} | REMOVED {removed_count} | TOTAL {total_evaluated} "
+            f"({evaluation_errors_count} evaluation errors)"
+        )
 
         return state
 
     except Exception as e:
-        print(f"ERROR in relevance_filter: {e}")
-        import traceback
-        traceback.print_exc()
-        logger.error(f"Error in relevance_filter: {str(e)}")
-        # Return original state to avoid breaking the flow
+        logger.error(f"Critical error in relevance filtering: {e}", exc_info=True)
+        # On critical error, return original state unchanged
         return state

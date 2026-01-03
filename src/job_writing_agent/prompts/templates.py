@@ -5,7 +5,11 @@ This module contains all prompt templates used throughout the job application
 generation process, organized by task.
 """
 
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import (
+    ChatPromptTemplate,
+    SystemMessagePromptTemplate,
+    HumanMessagePromptTemplate,
+)
 from langchain_core.messages import SystemMessage, HumanMessage
 
 # Persona selection prompts
@@ -201,19 +205,26 @@ Example: If draft #2 is best, return ONLY '2'.
 
 REVISION_PROMPT: ChatPromptTemplate = ChatPromptTemplate.from_messages(
     [
-        SystemMessage(
-            content="You are an expert job application writer. Revise the draft based on feedback."
+        SystemMessagePromptTemplate.from_template(
+            "You are an expert job application writer. Revise the draft based on BOTH the self-evaluation and external feedback provided."
         ),
-        HumanMessage(
-            content="""
-    # Original Draft
+        HumanMessagePromptTemplate.from_template(
+            """
+    --------------------------------Original Draft--------------------------------
     {draft}
-
-    # Feedback
+    ----------------------------------------------------------------------------------------
+    
+    --------------------------------Candidate Feedback--------------------------------
     {feedback}
+    ----------------------------------------------------------------------------------------
+    
+    --------------------------------Critique Feedback--------------------------------
+    {critique_feedback}
+    ----------------------------------------------------------------------------------------
+    
+    Based on the self evaluation in the Original Draft, Critique Feedback and the Candidates' Feedback, revise the content taking essence of the self evaluation, Critique Feedback and the Candidates' Feedback into account. Do not repeat the same content from the Original Draft, Critique Feedback and the Candidates' Feedback.
 
-    Revise the draft to incorporate this feedback while maintaining professionalism and impact.
-    Return the complete, final version.
+    Return the content of the revised draft. Make sure the output is only the content that is the revised content and nothing else.
     """
         ),
     ]

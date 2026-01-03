@@ -1,97 +1,304 @@
-# -*- coding: utf-8 -*-
-"""
-This module performs the research phase of the job application writing process.
-One of the stages is Tavily Search which will be use to search for the company
-"""
-
+# research_workflow.py
 import logging
 import json
-from langgraph.graph import StateGraph, START, END
+import asyncio
+from typing import Dict, Any, cast
 
+from langgraph.graph import StateGraph, END, START
+import dspy
 from job_writing_agent.tools.SearchTool import TavilyResearchTool
 from job_writing_agent.classes.classes import ResearchState
-from job_writing_agent.tools.SearchTool import relevance_filter
-
+from job_writing_agent.tools.SearchTool import filter_research_results_by_relevance
+from job_writing_agent.agents.output_schema import (
+    CompanyResearchDataSummarizationSchema,
+)
+from job_writing_agent.utils.llm_provider_factory import LLMFactory
 
 logger = logging.getLogger(__name__)
 
-# Set up logging
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+# Configuration
+MAX_RETRIES = 3
+RETRY_DELAY = 2  # seconds
+QUERY_TIMEOUT = 30  # seconds
+EVAL_TIMEOUT = 15  # seconds per evaluation
 
 
-async def research_company(state: ResearchState) -> ResearchState:
-    """Research the company if name is available."""
-    state["current_node"] = "research_company"
-
+def validate_research_inputs(state: ResearchState) -> tuple[bool, str, str]:
+    """
+    Validate that required inputs are present.
+    Returns: (is_valid, company_name, job_description)
+    """
     try:
-        # Extract values from state
-        company_name: str = state["company_research_data"].get("company_name", None)
-        job_description = state["company_research_data"].get("job_description", None)
+        company_name = state["company_research_data"].get("company_name", "")
+        job_description = state["company_research_data"].get("job_description", "")
 
-        assert company_name is not None, "Company name is required for research_company"
-        assert job_description is not None, (
-            "Job description is required for research_company"
-        )
+        if not company_name or not company_name.strip():
+            logger.error("Company name is missing or empty")
+            return False, "", ""
 
-        logger.info(f"Researching company: {company_name}")
+        if not job_description or not job_description.strip():
+            logger.error("Job description is missing or empty")
+            return False, "", ""
 
-        # Call search_company using the invoke method instead of __call__
-        # The tool expects job_description and company_name and returns a tuple
-        tavily_search = TavilyResearchTool(
-            job_description=job_description, company_name=company_name
-        )
+        return True, company_name.strip(), job_description.strip()
 
-        tavily_search_queries = tavily_search.create_tavily_queries()
+    except (KeyError, TypeError, AttributeError) as e:
+        logger.error(f"Invalid state structure: {e}")
+        return False, "", ""
 
-        tavily_search_queries_json: dict = json.loads(
-            tavily_search_queries["search_queries"]
-        )
 
-        logger.info(list(tavily_search_queries_json.values()))
+def parse_dspy_queries_with_fallback(
+    raw_queries: Dict[str, Any], company_name: str
+) -> Dict[str, str]:
+    """
+    Parse DSPy query output with multiple fallback strategies.
+    Returns a dict of query_id -> query_string.
+    """
+    try:
+        # Try to extract search_queries field
+        if isinstance(raw_queries, dict) and "search_queries" in raw_queries:
+            queries_data = raw_queries["search_queries"]
 
-        tavily_search_results: list[list[str]] = tavily_search.tavily_search_company(
-            tavily_search_queries_json
-        )
+            # If it's a JSON string, parse it
+            if isinstance(queries_data, str):
+                try:
+                    queries_data = json.loads(queries_data)
+                except json.JSONDecodeError as e:
+                    logger.warning(f"JSON decode failed: {e}. Using fallback queries.")
+                    return get_fallback_queries(company_name)
 
-        assert isinstance(tavily_search_results, list), (
-            "Expected list or tuple from tavily_search_company"
-        )
-        assert len(tavily_search_results) > 0, (
-            "No results returned from tavily_search_company"
-        )
-        assert len(tavily_search_queries_json) > 0, "No search queries were attempted"
+            # Extract query strings
+            if isinstance(queries_data, dict):
+                parsed = {}
+                for key, value in queries_data.items():
+                    if isinstance(value, str):
+                        parsed[key] = value
+                    elif isinstance(value, list) and len(value) > 0:
+                        parsed[key] = str(value[0])
 
-        logger.info(
-            f"Search completed with results and {len(tavily_search_queries)} queries"
-        )
+                if parsed:
+                    return parsed
 
-        # Store results in state - note that results is the first item in the tuple
-        state["attempted_search_queries"] = list(tavily_search_queries_json.values())
-        state["company_research_data"]["tavily_search"] = tavily_search_results
+        # If we reach here, parsing failed
+        logger.warning("Could not parse DSPy queries. Using fallback.")
+        return get_fallback_queries(company_name)
 
     except Exception as e:
-        logger.error(f"Error in research_company: {str(e)}")
-        # Provide empty results to avoid breaking the workflow
-        state["company_research_data"]["tavily_search"] = []
-        state["attempted_search_queries"] = []
-    finally:
+        logger.error(f"Error parsing DSPy queries: {e}. Using fallback.")
+        return get_fallback_queries(company_name)
+
+
+def get_fallback_queries(company_name: str) -> Dict[str, str]:
+    """
+    Generate basic fallback queries when DSPy fails.
+    """
+    return {
+        "query1": f"{company_name} company culture and values",
+        "query2": f"{company_name} recent news and achievements",
+        "query3": f"{company_name} mission statement and goals",
+    }
+
+
+def company_research_data_summary(state: ResearchState) -> ResearchState:
+    """
+    Summarize the filtered research data into a concise summary.
+    Replaces the raw tavily_search results with a summarized version.
+    """
+    try:
+        state["current_node"] = "company_research_data_summary"
+
+        # Extract the current research data
+        company_research_data = state.get("company_research_data", {})
+        tavily_search_data = company_research_data.get("tavily_search", [])
+
+        # If no research data, skip summarization
+        if not tavily_search_data or len(tavily_search_data) == 0:
+            logger.warning("No research data to summarize. Skipping summarization.")
+            return state
+
+        logger.info(f"Summarizing {len(tavily_search_data)} research result sets...")
+
+        # Create DSPy summarization chain
+        company_research_data_summarization = dspy.ChainOfThought(
+            CompanyResearchDataSummarizationSchema
+        )
+
+        # Initialize LLM provider
+
+        llm_provider = LLMFactory()
+        llm = llm_provider.create_dspy(
+            model="mistralai/mistral-7b-instruct:free",
+            provider="openrouter",
+            temperature=0.3,
+        )
+
+        # Generate summary using DSPy
+        with dspy.context(lm=llm, adapter=dspy.JSONAdapter()):
+            response = company_research_data_summarization(
+                company_research_data=company_research_data
+            )
+        # Extract the summary from the response
+        # The response should have a 'company_research_data_summary' field (JSON string)
+        if hasattr(response, "company_research_data_summary"):
+            summary_json_str = response.company_research_data_summary
+        elif isinstance(response, dict) and "company_research_data_summary" in response:
+            summary_json_str = response["company_research_data_summary"]
+        else:
+            logger.error(
+                f"Unexpected response format from summarization: {type(response)}"
+            )
+            return state
+
+        # Parse the JSON summary
+        state["company_research_data"]["company_research_data_summary"] = (
+            summary_json_str
+        )
+
+        return state
+
+    except Exception as e:
+        logger.error(f"Error in company_research_data_summary: {e}", exc_info=True)
+        # Return state unchanged on error
         return state
 
 
-print("\n\n\nInitializing research workflow...\n\n\n")
+async def research_company_with_retry(state: ResearchState) -> ResearchState:
+    """
+    Research company with retry logic and timeouts.
+    """
+    state["current_node"] = "research_company"
+
+    # Validate inputs
+    is_valid, company_name, job_description = validate_research_inputs(state)
+
+    if not is_valid:
+        logger.error("Invalid inputs for research. Skipping research phase.")
+        state["company_research_data"]["tavily_search"] = []
+        state["attempted_search_queries"] = []
+        return state
+
+    logger.info(f"Researching company: {company_name}")
+
+    # Try with retries
+    for attempt in range(MAX_RETRIES):
+        try:
+            # Create tool instance
+            tavily_search = TavilyResearchTool(
+                job_description=job_description, company_name=company_name
+            )
+
+            # Generate queries with timeout
+            queries_task = asyncio.create_task(
+                asyncio.to_thread(tavily_search.create_tavily_queries)
+            )
+
+            try:
+                raw_queries = await asyncio.wait_for(
+                    queries_task, timeout=QUERY_TIMEOUT
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    f"Query generation timed out (attempt {attempt + 1}/{MAX_RETRIES})"
+                )
+                if attempt < MAX_RETRIES - 1:
+                    await asyncio.sleep(RETRY_DELAY)
+                    continue
+                else:
+                    raise
+
+            # Parse queries with fallback
+            # Convert DSPy Prediction to dict if needed
+            if hasattr(raw_queries, "dict"):
+                raw_queries_dict = cast(Dict[str, Any], raw_queries.dict())
+            elif hasattr(raw_queries, "__dict__"):
+                raw_queries_dict = cast(Dict[str, Any], raw_queries.__dict__)
+            elif isinstance(raw_queries, dict):
+                raw_queries_dict = cast(Dict[str, Any], raw_queries)
+            else:
+                raw_queries_dict = cast(Dict[str, Any], dict(raw_queries))
+
+            queries = parse_dspy_queries_with_fallback(raw_queries_dict, company_name)
+
+            if not queries:
+                logger.warning("No valid queries generated")
+                queries = get_fallback_queries(company_name)
+
+            logger.info(
+                f"Generated {len(queries)} search queries: {list(queries.keys())}"
+            )
+
+            # Perform searches with timeout
+            search_task = asyncio.create_task(
+                asyncio.to_thread(tavily_search.tavily_search_company, queries)
+            )
+
+            try:
+                search_results = await asyncio.wait_for(
+                    search_task, timeout=QUERY_TIMEOUT * len(queries)
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    f"Search timed out (attempt {attempt + 1}/{MAX_RETRIES})"
+                )
+                if attempt < MAX_RETRIES - 1:
+                    await asyncio.sleep(RETRY_DELAY)
+                    continue
+                else:
+                    raise
+
+            # Validate results
+            if not isinstance(search_results, list):
+                logger.warning(f"Invalid search results type: {type(search_results)}")
+                search_results = []
+
+            if len(search_results) == 0:
+                logger.warning("No search results returned")
+
+            # Store results
+            state["attempted_search_queries"] = list(queries.values())
+            state["company_research_data"]["tavily_search"] = search_results
+
+            logger.info(
+                f"Research completed successfully with {len(search_results)} result sets"
+            )
+            return state
+
+        except Exception as e:
+            logger.error(
+                f"Error in research_company (attempt {attempt + 1}/{MAX_RETRIES}): {e}",
+                exc_info=True,
+            )
+
+            if attempt < MAX_RETRIES - 1:
+                await asyncio.sleep(RETRY_DELAY * (attempt + 1))  # Exponential backoff
+            else:
+                logger.error("All retry attempts exhausted. Using empty results.")
+                state["company_research_data"]["tavily_search"] = []
+                state["attempted_search_queries"] = []
+
+    return state
+
+
+async def research_company(state: ResearchState) -> ResearchState:
+    """Wrapper to call the retry version."""
+    return await research_company_with_retry(state)
+
+
 # Create research subgraph
 research_subgraph = StateGraph(ResearchState)
 
 # Add research subgraph nodes
 research_subgraph.add_node("research_company", research_company)
-research_subgraph.add_node("relevance_filter", relevance_filter)
-
+research_subgraph.add_node("relevance_filter", filter_research_results_by_relevance)
+research_subgraph.add_node(
+    "company_research_data_summary", company_research_data_summary
+)
 
 # Add research subgraph edges
 research_subgraph.add_edge(START, "research_company")
 research_subgraph.add_edge("research_company", "relevance_filter")
-research_subgraph.add_edge("relevance_filter", END)
+research_subgraph.add_edge("relevance_filter", "company_research_data_summary")
+research_subgraph.add_edge("company_research_data_summary", END)
 
 # Compile research subgraph
 research_workflow = research_subgraph.compile()
