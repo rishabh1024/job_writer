@@ -3,33 +3,36 @@ Workflow runner for the job application writer.
 This module provides the JobWorkflow class and CLI runner.
 """
 
+# Standard library imports
 import asyncio
 import logging
-import sys
 import os
+import sys
 from datetime import datetime
 from functools import cached_property
-from typing import Optional, Dict, Any
+from typing import Any
 
+# Third-party imports
 from langchain_core.tracers import ConsoleCallbackHandler, LangChainTracer
 from langgraph.graph import StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
+# Local imports
 from job_writing_agent.agents.nodes import (
     create_draft,
     critique_draft,
     finalize_document,
     human_approval,
 )
-from job_writing_agent.classes import DataLoadState
-from job_writing_agent.nodes.initializing import data_loading_workflow
+from job_writing_agent.classes import DataLoadState, ResearchState
+from job_writing_agent.nodes.data_loading_workflow import data_loading_workflow
 from job_writing_agent.nodes.research_workflow import research_workflow
 from job_writing_agent.utils.application_cli_interface import handle_cli
-from job_writing_agent.utils.result_utils import print_result, save_result
 from job_writing_agent.utils.logging.logging_decorators import (
-    log_execution,
     log_errors,
+    log_execution,
 )
+from job_writing_agent.utils.result_utils import print_result, save_result
 
 logger = logging.getLogger(__name__)
 
@@ -84,12 +87,62 @@ class JobWorkflow:
         return {
             "resume_path": self.resume,
             "job_description_source": self.job_description_source,
-            "content": self.content,
+            "content_category": self.content,
             "current_node": "",
             "messages": [],
             "company_research_data": {},
         }
 
+    # Conditional routing after data loading
+    def route_after_load(self, state: DataLoadState) -> str:
+        """
+        Route based on next_node set by data loading subgraph.
+
+        The data loading subgraph sets next_node to either "load" (if validation
+        fails) or "research" (if validation passes).
+
+        Parameters
+        ----------
+        state: DataLoadState
+            Current workflow state.
+
+        Returns
+        -------
+        str
+            Next node name: "load" or "research".
+        """
+        next_node = state.get("next_node", "research")  # Default to research
+        logger.info(f"Routing after load: {next_node}")
+        return next_node
+
+    def dataload_to_research_adapter(self, state: DataLoadState) -> ResearchState:
+        """
+        Adapter to convert DataLoadState to ResearchState.
+
+        Extracts only fields needed for research workflow following the
+        adapter pattern recommended by LangGraph documentation.
+
+        Parameters
+        ----------
+        state: DataLoadState
+            Current workflow state with loaded data.
+
+        Returns
+        -------
+        ResearchState
+            State formatted for research subgraph with required fields.
+        """
+        logger.info("Adapter for converting DataLoadState to ResearchState")
+
+        return ResearchState(
+            company_research_data=state.get("company_research_data", {}),
+            attempted_search_queries=[],
+            current_node="",
+            content_category=state.get("content_category", ""),
+            messages=state.get("messages", []),
+        )
+
+    @cached_property
     def job_app_graph(self) -> StateGraph:
         """
         Build and configure the job application workflow graph.
@@ -111,58 +164,40 @@ class JobWorkflow:
         StateGraph
             Configured LangGraph state machine ready for compilation.
         """
-        graph = StateGraph(DataLoadState)
+        agent_workflow_graph = StateGraph(DataLoadState)
 
         # Add workflow nodes (subgraphs and individual nodes)
-        graph.add_node("load", data_loading_workflow)
-        graph.add_node("research", research_workflow)
-        graph.add_node("create_draft", create_draft)
-        graph.add_node("critique", critique_draft)
-        graph.add_node("human_approval", human_approval)
-        graph.add_node("finalize", finalize_document)
+        agent_workflow_graph.add_node("load", data_loading_workflow)
+        agent_workflow_graph.add_node(
+            "to_research_adapter", self.dataload_to_research_adapter
+        )
+        agent_workflow_graph.add_node("research", research_workflow)
+        agent_workflow_graph.add_node("create_draft", create_draft)
+        agent_workflow_graph.add_node("critique", critique_draft)
+        agent_workflow_graph.add_node("human_approval", human_approval)
+        agent_workflow_graph.add_node("finalize", finalize_document)
 
         # Set entry and exit points
-        graph.set_entry_point("load")
-        graph.set_finish_point("finalize")
+        agent_workflow_graph.set_entry_point("load")
+        agent_workflow_graph.set_finish_point("finalize")
 
-        # Conditional routing after data loading
-        def route_after_load(state: DataLoadState) -> str:
-            """
-            Route based on next_node set by data loading subgraph.
-
-            The data loading subgraph sets next_node to either "load" (if validation
-            fails) or "research" (if validation passes).
-
-            Parameters
-            ----------
-            state: DataLoadState
-                Current workflow state.
-
-            Returns
-            -------
-            str
-                Next node name: "load" or "research".
-            """
-            next_node = state.get("next_node", "research")  # Default to research
-            logger.info(f"Routing after load: {next_node}")
-            return next_node
-
-        graph.add_conditional_edges(
+        agent_workflow_graph.add_conditional_edges(
             "load",
-            route_after_load,
+            self.route_after_load,
             {
                 "load": "load",  # Loop back to load subgraph if validation fails
-                "research": "research",  # Proceed to research if validation passes
+                "research": "to_research_adapter",  # Route to adapter first
             },
         )
 
         # Sequential edges for main workflow
-        graph.add_edge("research", "create_draft")
-        graph.add_edge("create_draft", "critique")
-        graph.add_edge("critique", "human_approval")
-        graph.add_edge("human_approval", "finalize")
+        agent_workflow_graph.add_edge("to_research_adapter", "research")
+        agent_workflow_graph.add_edge("research", "create_draft")
+        agent_workflow_graph.add_edge("create_draft", "critique")
+        agent_workflow_graph.add_edge("critique", "human_approval")
+        agent_workflow_graph.add_edge("human_approval", "finalize")
 
-        return graph
+        return agent_workflow_graph
 
     def _get_callbacks(self) -> list:
         """
@@ -208,7 +243,7 @@ class JobWorkflow:
 
     @log_execution
     @log_errors
-    async def run(self) -> Optional[Dict[str, Any]]:
+    async def run(self) -> dict[str, Any] | None:
         """
         Execute the complete job application writer workflow.
 
@@ -289,7 +324,8 @@ class JobWorkflow:
         Exception
             If graph compilation fails (e.g., invalid edges, missing nodes).
         """
-        return self.job_app_graph.compile()
+        compiled_graph = self.job_app_graph.compile()
+        return compiled_graph
 
 
 def main():
@@ -300,7 +336,6 @@ def main():
         content=args.content_type,
     )
     result = asyncio.run(workflow.run())
-    # print(f"result: {result}")
     if result:
         print_result(args.content_type, result["output_data"])
         save_result(args.content_type, result["output_data"])

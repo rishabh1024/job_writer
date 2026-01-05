@@ -166,7 +166,7 @@ class JobDescriptionLoader:
         # TODO: Implement form field extraction
         pass
 
-    async def _prompt_user(self) -> str:
+    async def _prompt_user_for_job_description(self) -> str:
         """
         Prompt the user for input (synchronous input wrapped for async use).
 

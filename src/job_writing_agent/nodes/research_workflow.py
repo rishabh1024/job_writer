@@ -1,16 +1,24 @@
 # research_workflow.py
-import logging
-import json
-import asyncio
-from typing import Dict, Any, cast
+"""Research workflow for company information gathering and filtering."""
 
-from langgraph.graph import StateGraph, END, START
+# Standard library imports
+import asyncio
+import json
+import logging
+from typing import Any, Dict, cast
+
+# Third-party imports
 import dspy
-from job_writing_agent.tools.SearchTool import TavilyResearchTool
-from job_writing_agent.classes.classes import ResearchState
-from job_writing_agent.tools.SearchTool import filter_research_results_by_relevance
+from langgraph.graph import END, START, StateGraph
+
+# Local imports
 from job_writing_agent.agents.output_schema import (
     CompanyResearchDataSummarizationSchema,
+)
+from job_writing_agent.classes.classes import ResearchState
+from job_writing_agent.tools.SearchTool import (
+    TavilyResearchTool,
+    filter_research_results_by_relevance,
 )
 from job_writing_agent.utils.llm_provider_factory import LLMFactory
 
@@ -25,12 +33,19 @@ EVAL_TIMEOUT = 15  # seconds per evaluation
 
 def validate_research_inputs(state: ResearchState) -> tuple[bool, str, str]:
     """
-    Validate that required inputs are present.
-    Returns: (is_valid, company_name, job_description)
+    Validate that required inputs are present in research state.
+
+    Args:
+        state: Current research workflow state
+
+    Returns:
+        Tuple of (is_valid, company_name, job_description)
     """
     try:
-        company_name = state["company_research_data"].get("company_name", "")
-        job_description = state["company_research_data"].get("job_description", "")
+        # Safe dictionary access with fallbacks
+        company_research_data = state.get("company_research_data", {})
+        company_name = company_research_data.get("company_name", "")
+        job_description = company_research_data.get("job_description", "")
 
         if not company_name or not company_name.strip():
             logger.error("Company name is missing or empty")
@@ -42,14 +57,14 @@ def validate_research_inputs(state: ResearchState) -> tuple[bool, str, str]:
 
         return True, company_name.strip(), job_description.strip()
 
-    except (KeyError, TypeError, AttributeError) as e:
+    except (TypeError, AttributeError) as e:
         logger.error(f"Invalid state structure: {e}")
         return False, "", ""
 
 
 def parse_dspy_queries_with_fallback(
-    raw_queries: Dict[str, Any], company_name: str
-) -> Dict[str, str]:
+    raw_queries: dict[str, Any], company_name: str
+) -> dict[str, str]:
     """
     Parse DSPy query output with multiple fallback strategies.
     Returns a dict of query_id -> query_string.
@@ -88,7 +103,7 @@ def parse_dspy_queries_with_fallback(
         return get_fallback_queries(company_name)
 
 
-def get_fallback_queries(company_name: str) -> Dict[str, str]:
+def get_fallback_queries(company_name: str) -> dict[str, str]:
     """
     Generate basic fallback queries when DSPy fails.
     """
@@ -102,19 +117,27 @@ def get_fallback_queries(company_name: str) -> Dict[str, str]:
 def company_research_data_summary(state: ResearchState) -> ResearchState:
     """
     Summarize the filtered research data into a concise summary.
-    Replaces the raw tavily_search results with a summarized version.
+
+    Replaces the raw tavily_search results with a summarized version using LLM.
+
+    Args:
+        state: Current research state with search results
+
+    Returns:
+        Updated state with research summary
     """
     try:
-        state["current_node"] = "company_research_data_summary"
+        # Update current node
+        updated_state = {**state, "current_node": "company_research_data_summary"}
 
-        # Extract the current research data
+        # Extract the current research data with safe access
         company_research_data = state.get("company_research_data", {})
         tavily_search_data = company_research_data.get("tavily_search", [])
 
         # If no research data, skip summarization
         if not tavily_search_data or len(tavily_search_data) == 0:
             logger.warning("No research data to summarize. Skipping summarization.")
-            return state
+            return updated_state
 
         logger.info(f"Summarizing {len(tavily_search_data)} research result sets...")
 
@@ -127,7 +150,7 @@ def company_research_data_summary(state: ResearchState) -> ResearchState:
 
         llm_provider = LLMFactory()
         llm = llm_provider.create_dspy(
-            model="mistralai/mistral-7b-instruct:free",
+            model="cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
             provider="openrouter",
             temperature=0.3,
         )
@@ -137,29 +160,31 @@ def company_research_data_summary(state: ResearchState) -> ResearchState:
             response = company_research_data_summarization(
                 company_research_data=company_research_data
             )
-        # Extract the summary from the response
-        # The response should have a 'company_research_data_summary' field (JSON string)
+        # Extract the summary from the response with safe access
+        summary_json_str = ""
         if hasattr(response, "company_research_data_summary"):
             summary_json_str = response.company_research_data_summary
-        elif isinstance(response, dict) and "company_research_data_summary" in response:
-            summary_json_str = response["company_research_data_summary"]
+        elif isinstance(response, dict):
+            summary_json_str = response.get("company_research_data_summary", "")
         else:
             logger.error(
                 f"Unexpected response format from summarization: {type(response)}"
             )
-            return state
+            return updated_state
 
-        # Parse the JSON summary
-        state["company_research_data"]["company_research_data_summary"] = (
+        # Update state with summary using safe dictionary operations
+        updated_company_research_data = {**company_research_data}
+        updated_company_research_data["company_research_data_summary"] = (
             summary_json_str
         )
+        updated_state["company_research_data"] = updated_company_research_data
 
-        return state
+        return updated_state
 
     except Exception as e:
         logger.error(f"Error in company_research_data_summary: {e}", exc_info=True)
         # Return state unchanged on error
-        return state
+        return updated_state
 
 
 async def research_company_with_retry(state: ResearchState) -> ResearchState:
@@ -173,9 +198,16 @@ async def research_company_with_retry(state: ResearchState) -> ResearchState:
 
     if not is_valid:
         logger.error("Invalid inputs for research. Skipping research phase.")
-        state["company_research_data"]["tavily_search"] = []
-        state["attempted_search_queries"] = []
-        return state
+        return ResearchState(
+            company_research_data={
+                **state.get("company_research_data", {}),
+                "tavily_search": [],
+            },
+            attempted_search_queries=[],
+            current_node="research_company",
+            content_category=state.get("content_category", "cover_letter"),
+            messages=state.get("messages", []),
+        )
 
     logger.info(f"Researching company: {company_name}")
 
@@ -254,14 +286,17 @@ async def research_company_with_retry(state: ResearchState) -> ResearchState:
             if len(search_results) == 0:
                 logger.warning("No search results returned")
 
-            # Store results
-            state["attempted_search_queries"] = list(queries.values())
-            state["company_research_data"]["tavily_search"] = search_results
-
-            logger.info(
-                f"Research completed successfully with {len(search_results)} result sets"
+            # Store results and return ResearchState
+            return ResearchState(
+                company_research_data={
+                    **state.get("company_research_data", {}),
+                    "tavily_search": search_results,
+                },
+                attempted_search_queries=list(queries.values()),
+                current_node="research_company",
+                content_category=state.get("content_category", "cover_letter"),
+                messages=state.get("messages", []),
             )
-            return state
 
         except Exception as e:
             logger.error(
@@ -273,22 +308,31 @@ async def research_company_with_retry(state: ResearchState) -> ResearchState:
                 await asyncio.sleep(RETRY_DELAY * (attempt + 1))  # Exponential backoff
             else:
                 logger.error("All retry attempts exhausted. Using empty results.")
-                state["company_research_data"]["tavily_search"] = []
-                state["attempted_search_queries"] = []
+                return ResearchState(
+                    company_research_data={
+                        **state.get("company_research_data", {}),
+                        "tavily_search": [],
+                    },
+                    attempted_search_queries=[],
+                    current_node="research_company",
+                    content_category=state.get("content_category", "cover_letter"),
+                    messages=state.get("messages", []),
+                )
 
-    return state
-
-
-async def research_company(state: ResearchState) -> ResearchState:
-    """Wrapper to call the retry version."""
-    return await research_company_with_retry(state)
+    return ResearchState(
+        company_research_data=state.get("company_research_data", {}),
+        attempted_search_queries=[],
+        current_node="research_company",
+        content_category=state.get("content_category", "cover_letter"),
+        messages=state.get("messages", []),
+    )
 
 
 # Create research subgraph
 research_subgraph = StateGraph(ResearchState)
 
 # Add research subgraph nodes
-research_subgraph.add_node("research_company", research_company)
+research_subgraph.add_node("research_company", research_company_with_retry)
 research_subgraph.add_node("relevance_filter", filter_research_results_by_relevance)
 research_subgraph.add_node(
     "company_research_data_summary", company_research_data_summary

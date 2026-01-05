@@ -1,14 +1,17 @@
+# Standard library imports
+import asyncio
 import logging
 import os
-import asyncio
-from dotenv import load_dotenv
 from pathlib import Path
 
+# Third-party imports
+import dspy
+from dotenv import load_dotenv
 from langchain_tavily import TavilySearch
 from openevals.llm import create_async_llm_as_judge
-from openevals.prompts import RAG_RETRIEVAL_RELEVANCE_PROMPT, RAG_HELPFULNESS_PROMPT
-import dspy
+from openevals.prompts import RAG_HELPFULNESS_PROMPT, RAG_RETRIEVAL_RELEVANCE_PROMPT
 
+# Local imports
 from ..agents.output_schema import TavilySearchQueries
 from ..classes.classes import ResearchState
 from ..utils.llm_provider_factory import LLMFactory
@@ -21,7 +24,11 @@ env_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=env_path, override=True)
 
 
-openrouter_api_key = os.environ["OPENROUTER_API_KEY"]
+# Safe environment variable access with validation
+openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
+if not openrouter_api_key:
+    logger.error("OPENROUTER_API_KEY environment variable not set")
+    raise ValueError("OPENROUTER_API_KEY environment variable is required")
 
 
 class TavilyResearchTool:
@@ -30,7 +37,7 @@ class TavilyResearchTool:
         job_description,
         company_name,
         max_results=5,
-        model_name="mistralai/mistral-7b-instruct:free",
+        model_name="cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
     ):
         # Create LLM inside __init__ (lazy initialization)
         llm_provider = LLMFactory()
@@ -55,19 +62,34 @@ class TavilyResearchTool:
             return response
 
     def tavily_search_company(self, queries):
+        """
+        Execute Tavily searches for multiple queries.
+
+        Args:
+            queries: Dictionary of query identifiers to query strings
+
+        Returns:
+            List of search result lists, one per query
+        """
         query_results: list[list[str]] = []
-        for query in queries:
+        for query_key in queries:
             try:
+                query_string = queries.get(query_key, "")
+                if not query_string:
+                    logger.warning(f"Empty query for key: {query_key}")
+                    continue
+
                 search_query_response = self.tavily_searchtool.invoke(
-                    {"query": queries[query]}
+                    {"query": query_string}
                 )
+                # Safe dictionary access for response
+                results = search_query_response.get("results", [])
                 query_results.append(
-                    [res["content"] for res in search_query_response["results"]]
+                    [res.get("content", "") for res in results if isinstance(res, dict)]
                 )
-                # print(f"Tavily Search Tool Response for query '{search_query_response['query']}': {query_results_map[search_query_response['query']]}")
             except Exception as e:
                 logger.error(
-                    f"Failed to perform company research using TavilySearchTool. Error : {e}"
+                    f"Failed to perform company research using TavilySearchTool. Error: {e}"
                 )
                 continue
 
@@ -120,10 +142,9 @@ async def filter_research_results_by_relevance(state: ResearchState) -> Research
     try:
         state["current_node"] = "filter_research_results_by_relevance"
 
-        # Extract search data from state
-        raw_search_results = state.get("company_research_data", {}).get(
-            "tavily_search", []
-        )
+        # Extract and validate required state fields once
+        company_research_data = state.get("company_research_data", {})
+        raw_search_results = company_research_data.get("tavily_search", [])
         search_queries_used = state.get("attempted_search_queries", [])
 
         # Validate data types
@@ -138,7 +159,9 @@ async def filter_research_results_by_relevance(state: ResearchState) -> Research
         # Early exit if no results
         if len(raw_search_results) == 0:
             logger.info("No search results to filter.")
-            state["company_research_data"]["tavily_search"] = []
+            # Update using the extracted variable
+            company_research_data["tavily_search"] = []
+            state["company_research_data"] = company_research_data
             return state
 
         logger.info(
@@ -201,6 +224,7 @@ async def filter_research_results_by_relevance(state: ResearchState) -> Research
                     logger.warning(
                         f"Evaluation timed out for query: {original_query[:60]}... (KEEPING result)"
                     )
+                    # Keep the result on timeout to avoid losing potentially useful data
                     return (search_result_content, True, "timeout")
 
                 except Exception as e:
@@ -248,8 +272,9 @@ async def filter_research_results_by_relevance(state: ResearchState) -> Research
             else:
                 results_removed_count += 1
 
-        # Update state with ONLY the relevant results
-        state["company_research_data"]["tavily_search"] = results_kept
+        # Update company_research_data with ONLY the relevant results
+        company_research_data["tavily_search"] = results_kept
+        state["company_research_data"] = company_research_data
 
         # Log filtering summary
         total_evaluated = len(raw_search_results)
