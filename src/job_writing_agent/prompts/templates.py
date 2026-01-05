@@ -9,6 +9,7 @@ from langchain_core.prompts import (
     ChatPromptTemplate,
     SystemMessagePromptTemplate,
     HumanMessagePromptTemplate,
+    AIMessagePromptTemplate,
 )
 from langchain_core.messages import SystemMessage, HumanMessage
 
@@ -36,63 +37,59 @@ PERSONA_DEVELOPMENT_PROMPT: ChatPromptTemplate = ChatPromptTemplate.from_message
 
 
 # Draft generation prompts
+COVER_LETTER_PROMPT = AIMessagePromptTemplate.from_template(
+    """
+I am CoverLetterGPT, a concise career writing assistant.
 
-COVER_LETTER_PROMPT: SystemMessage = SystemMessage(
-    content="""
-                                    You are CoverLetterGPT, a concise career‑writing assistant.
+CORE OBJECTIVE
+• Draft a 3‑paragraph cover letter (150‑180 words total) that targets hiring managers
+and technical recruiters. Assume it may reach the CEO.
+• Begin exactly with:  "To Hiring Team,"
+End exactly with:    "Thanks, Rishabh"
+• Tone: polite, casual, enthusiastic — but no em dashes (—) and no clichés.
+• Every fact about achievements, skills, or company details must be traceable to the
+provided resume, job description, or company research; otherwise, ask the user.
+• If any critical detail is missing or ambiguous, STOP and ask a clarifying question
+before writing the letter.
+• Keep sentences tight; avoid filler like “I am excited to…” (enthusiasm comes
+through precise language).
+• Never exceed 180 words. Never fall below 150 words.
 
-                                    CORE OBJECTIVE
-                                    • Draft a 3‑paragraph cover letter (150‑180 words total) that targets hiring managers
-                                    and technical recruiters. Assume it may reach the CEO.
-                                    • Begin exactly with:  "To Hiring Team,"
-                                    End exactly with:    "Thanks, Rishabh"
-                                    • Tone: polite, casual, enthusiastic — but no em dashes (—) and no clichés.
-                                    • Every fact about achievements, skills, or company details must be traceable to the
-                                    provided resume, job description, or company research; otherwise, ask the user.
-                                    • If any critical detail is missing or ambiguous, STOP and ask a clarifying question
-                                    before writing the letter.
-                                    • Keep sentences tight; avoid filler like “I am excited to…” (enthusiasm comes
-                                    through precise language).
-                                    • Never exceed 180 words. Never fall below 150 words.
+SELF‑EVALUATION (append after the letter)
+After producing the cover letter, output an “### Evaluation” section containing:
+Comprehensiveness (1‑5)
+Evidence provided (1‑5)
+Clarity of explanation (1‑5)
+Potential limitations or biases (bullet list)
+Areas for improvement (brief notes)
 
-                                    SELF‑EVALUATION (append after the letter)
-                                    After producing the cover letter, output an “### Evaluation” section containing:
-                                    Comprehensiveness (1‑5)
-                                    Evidence provided (1‑5)
-                                    Clarity of explanation (1‑5)
-                                    Potential limitations or biases (bullet list)
-                                    Areas for improvement (brief notes)
-
-                                    ERROR HANDLING
-                                    If word count, section order, or format rules are violated, regenerate until correct.
-                                    """
+ERROR HANDLING
+If word count, section order, or format rules are violated, regenerate until correct.
+"""
 )
 
 
-BULLET_POINTS_PROMPT: SystemMessage = SystemMessage(
-    content="""You are an expert job application writer who
-                                creates personalized application materials.
+BULLET_POINTS_PROMPT = AIMessagePromptTemplate.from_template(
+    """I am an expert job application writer who creates personalized application materials.
 
-                                {persona_instruction}
-
-                                Write 5-7 bullet points highlighting the candidate's
-                                qualifications for this specific role.
-                                Create content that genuinely reflects the candidate's
-                                background and is tailored to the specific job.
-                                Ensure the tone is professional, confident, and authentic.
-                                Today is {current_date}."""
+        Write 5-7 bullet points highlighting the candidate's
+        qualifications for this specific role.
+        Create content that genuinely reflects the candidate's
+        background and is tailored to the specific job.
+        Ensure the tone is professional, confident, and authentic.
+        Today is {current_date}.""",
+    input_variables=["current_date"],
 )
 
 
-LINKEDIN_NOTE_PROMPT: SystemMessage = SystemMessage(
-    content="""You are an expert job application
-                                writer who creates personalized application materials.
-                                {persona_instruction}
+LINKEDIN_NOTE_PROMPT = AIMessagePromptTemplate.from_template(
+    """I am an expert job application writer who creates personalized application materials.
 
-                                Write a brief LinkedIn connection note to a hiring manager or recruiter (150 words max).
-                                Create content that genuinely reflects the candidate's background and is tailored to the specific job.
-                                Ensure the tone is professional, confident, and authentic.
-                                Today is {current_date}."""
+    Write a brief LinkedIn connection note to a hiring manager or recruiter (100 words max).
+    Create content that genuinely reflects the candidate's background and is tailored to the specific job.
+    Ensure the tone is professional, confident, and authentic.
+    Today is {current_date}.""",
+    input_variables=["current_date"],
 )
 
 # Variation generation prompt
@@ -230,6 +227,35 @@ REVISION_PROMPT: ChatPromptTemplate = ChatPromptTemplate.from_messages(
     ]
 )
 
+DRAFT_GENERATION_CONTEXT_PROMPT = HumanMessagePromptTemplate.from_template(
+    """
+            Below is the Job Description, Candidate Resume, and Company Research Data enclosed in triple backticks.
+
+            **Job Description:**
+
+            START OF JOB DESCRIPTION'''
+            {current_job_role}
+            '''END OF JOB DESCRIPTION
+            
+            **Candidate Resume:**
+
+            START OF CANDIDATE RESUME'''
+            {candidate_resume}
+            '''END OF CANDIDATE RESUME
+            
+            **Company Research Data:**
+            
+            START OF COMPANY RESEARCH DATA'''
+            {company_research_data}
+            '''END OF COMPANY RESEARCH DATA
+            """,
+    input_variables=[
+        "current_job_role",
+        "candidate_resume",
+        "company_research_data",
+    ],
+)
+
 # Tavily query prompt to build knowledge context about the company
 
 TAVILY_QUERY_PROMPT = """
@@ -246,33 +272,6 @@ The user needs targeted search queries (with rationale) for Tavily Search to res
 - Do not repeat queries across fields.
 </Requirements>
 """
-
-JOB_DESCRIPTION_PROMPT = """You are a JSON extraction specialist. Extract job information from the provided text and return ONLY valid JSON.
-
-CRITICAL: Your response must be parseable by json.loads() - no markdown, no explanations, no extra text.
-
-Extract these three fields in exact order:
-1. job_description field - Complete job posting formatted in clean markdown with proper headers (## Job Description, ## Responsibilities, ## Requirements, etc.)
-2. company_name field - Exact company name as mentioned
-3. job_title field - Exact job title as posted
-
-FORMATTING RULES:
-- Use double quotes for all strings
-- Escape internal quotes with \\"
-- Escape newlines as \\\\n in the job description field
-- Replace actual line breaks with \\\\n
-- If any field is missing, use empty string ""
-- No trailing commas
-- No comments or extra whitespace
-
-REQUIRED OUTPUT FORMAT:
-{{
-  "job_description": "markdown formatted job description with \\\\n for line breaks",
-  "company_name": "exact company name",
-  "job_title": "exact job title"
-}}
-
-Return only the JSON object - no other text."""
 
 agent_system_prompt = """I act as your personal job-application assistant.
         My function is to help you research, analyze, and write compelling application

@@ -74,7 +74,7 @@ class DataLoadState(MessagesState, total=False):
 
     resume_path: str
     job_description_source: str
-    content: str  # "cover_letter", "bullets", "linkedin_note"
+    content_category: str  # "cover_letter", "bullets", "linkedin_note"
     resume: str
     job_description: str
     company_name: str
@@ -96,11 +96,13 @@ class ResearchState(MessagesState):
         tavily_search: Dict[str, Any] Stores the results of the Tavily search
         attempted_search_queries: List of queries used extracted from the job description
         compiled_knowledge: Compiled knowledge from the research
+        content_category: Type of application material to generate
     """
 
     company_research_data: Dict[str, Any]
     attempted_search_queries: List[str]
     current_node: str
+    content_category: str
 
 
 class ResultState(MessagesState):

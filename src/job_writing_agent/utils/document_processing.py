@@ -2,27 +2,28 @@
 Document processing utilities for parsing resumes and job descriptions.
 """
 
+# Standard library imports
 import logging
 import os
 import re
 from pathlib import Path
 from urllib.parse import urlparse
-from typing_extensions import Dict, List, Any
 
-
+# Third-party imports
 import dspy
 from langchain_community.document_loaders import PyPDFLoader, AsyncChromiumLoader
 from langchain_community.document_transformers import Html2TextTransformer
+from langchain_core.documents import Document
 from langchain_text_splitters import (
     RecursiveCharacterTextSplitter,
     MarkdownHeaderTextSplitter,
 )
-from langchain_core.documents import Document
 from langfuse import observe
 from pydantic import BaseModel, Field
+from typing_extensions import Any
 
-# Local imports - using relative imports
-from .errors import URLExtractionError, LLMProcessingError, JobDescriptionParsingError
+# Local imports
+from .errors import JobDescriptionParsingError, LLMProcessingError, URLExtractionError
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -64,8 +65,8 @@ class ResumeSection(BaseModel):
 class StructuredResume(BaseModel):
     """Model for a structured resume with sections."""
 
-    sections: List[ResumeSection] = Field(description="List of resume sections")
-    contact_info: Dict[str, str] = Field(
+    sections: list[ResumeSection] = Field(description="List of resume sections")
+    contact_info: dict[str, str] = Field(
         description="Contact information extracted from the resume"
     )
 
@@ -122,7 +123,7 @@ def clean_resume_text(text: str) -> str:
 
 
 @observe()
-def extract_contact_info(text: str) -> Dict[str, str]:
+def extract_contact_info(text: str) -> dict[str, str]:
     """Extract contact information from resume text.
 
     Args:
@@ -162,7 +163,7 @@ def extract_contact_info(text: str) -> Dict[str, str]:
 
 
 @observe()
-def identify_resume_sections(text: str) -> List[Dict[str, Any]]:
+def identify_resume_sections(text: str) -> list[dict[str, Any]]:
     """Identify sections in a resume text.
 
     Args:
@@ -231,16 +232,33 @@ def identify_resume_sections(text: str) -> List[Dict[str, Any]]:
 
 
 def _collapse_ws(text: str) -> str:
-    """Collapse stray whitespace but keep bullet breaks."""
+    """
+    Collapse stray whitespace but keep bullet breaks.
+
+    Args:
+        text: Input text with potential whitespace issues
+
+    Returns:
+        Text with collapsed whitespace
+    """
     text = re.sub(r"\n\s*([•\-–])\s*", r"\n\1 ", text)
     return re.sub(r"[ \t\r\f\v]+", " ", text).replace(" \n", "\n").strip()
 
 
 def _is_heading(line: str) -> bool:
+    """
+    Check if a line is a heading (all uppercase, short, no digits).
+
+    Args:
+        line: Line of text to check
+
+    Returns:
+        True if line appears to be a heading
+    """
     return line.isupper() and len(line.split()) <= 5 and not re.search(r"\d", line)
 
 
-def parse_resume(file_path: str | Path) -> List[Document]:
+def parse_resume(file_path: str | Path) -> list[Document]:
     """
     Load a résumé from PDF or TXT file → list[Document] chunks
     (≈400 chars, 50‑char overlap) with {source, section} metadata.
@@ -326,7 +344,7 @@ async def get_job_description(file_path_or_url: str) -> Document:
     )
 
 
-async def scrape_job_description_from_web(urls: List[str]):
+async def scrape_job_description_from_web(urls: list[str]) -> str:
     """This function will first scrape the data from the job listing.
     Then using the recursive splitter using the different seperators,
     it preserves the paragraphs, lines and words"""
@@ -393,11 +411,15 @@ async def parse_job_description_from_url(url: str) -> Document:
         # 3. Process content with the LLM
         try:
             logger.info("Processing content with DSPy LLM...")
-            # Configure DSPy LM (it's good practice to do this here if it can change)
+            # Configure DSPy LM with safe environment variable access
+            cerebras_api_key = os.getenv("CEREBRAS_API_KEY")
+            if not cerebras_api_key:
+                raise ValueError("CEREBRAS_API_KEY environment variable not set")
+
             dspy.configure(
                 lm=dspy.LM(
                     "cerebras/qwen-3-32b",
-                    api_key=os.environ.get("CEREBRAS_API_KEY"),
+                    api_key=cerebras_api_key,
                     temperature=0.1,
                     max_tokens=60000,  # Note: This max_tokens is unusually high
                 )

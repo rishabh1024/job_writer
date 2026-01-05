@@ -1,18 +1,29 @@
 import argparse
-import os
+from pathlib import Path
 from typing import Iterable
 
 import requests
-from requests.exceptions import RequestException
 
 
-DEFAULT_MODEL = "mistralai/mistral-7b-instruct:free"
+DEFAULT_MODEL = "allenai/olmo-3.1-32b-think:free"
 DEFAULT_CONTENT_TYPE = "cover_letter"
 
 
 def readable_file(path: str) -> str:
-    """Validate and return contents of a readable file."""
-    if not os.path.isfile(path):
+    """
+    Validate that the file exists and has a supported extension.
+
+    Args:
+        path: File path to validate
+
+    Returns:
+        Original path string if valid
+
+    Raises:
+        ArgumentTypeError: If file doesn't exist or has unsupported extension
+    """
+    file_path = Path(path)
+    if not file_path.is_file():
         raise argparse.ArgumentTypeError(f"File not found: {path}")
     if not path.lower().endswith((".pdf", ".md", ".json", ".txt")):
         raise argparse.ArgumentTypeError(
@@ -22,7 +33,18 @@ def readable_file(path: str) -> str:
 
 
 def valid_temp(temp: str) -> float:
-    """Ensure temperature is within a reasonable range."""
+    """
+    Ensure temperature is within a reasonable range.
+
+    Args:
+        temp: Temperature value as string
+
+    Returns:
+        Temperature as float
+
+    Raises:
+        ArgumentTypeError: If temperature is outside valid range [0, 2]
+    """
     value = float(temp)
     if not (0 <= value <= 2):
         raise argparse.ArgumentTypeError("Temperature must be between 0 and 2.")
@@ -31,42 +53,41 @@ def valid_temp(temp: str) -> float:
 
 def is_valid_url(
     job_posting: str, allowed_statuses: Iterable[int] | None = None
-) -> bool:
+) -> str:
     """
-    Returns ``True`` if *url* is reachable and its HTTP status code is in
-    `allowed_statuses`.  Defaults to any 2xx or 3xx response (common
-    successful codes).
+    Validate that a URL is reachable and returns an acceptable HTTP status.
 
-    Parameters
-    ----------
-    job_posting : str
-        The URL for the job posting.
-    timeout : float, optional
-        Timeout for the request (seconds). Defaults to 10.
-    allowed_statuses : Iterable[int] | None, optional
-        Specific status codes that are considered “valid”.
-        If ``None`` (default) any 200‑399 status is accepted.
+    Defaults to any 2xx or 3xx response (common successful codes).
 
-    Returns
-    -------
-    bool
-        ``True`` if the URL succeeded, ``False`` otherwise.
+    Args:
+        job_posting: The URL for the job posting
+        allowed_statuses: Specific status codes that are considered valid.
+            If None (default), any 200-399 status is accepted.
+
+    Returns:
+        URL of the job posting if successful, error message if failed
     """
     if allowed_statuses is None:
         # All 2xx and 3xx responses are considered “valid”
         allowed_statuses = range(200, 400)
 
-    with requests.get(
-        job_posting, timeout=30, allow_redirects=True, stream=True
-    ) as resp:
-        if resp.status_code in allowed_statuses:
-            return job_posting
-        else:
-            raise RequestException("Job Posting could not be reached")
+    try:
+        response = requests.get(
+            job_posting, timeout=30, allow_redirects=True, stream=True
+        )
+        response.raise_for_status()
+        return job_posting
+    except requests.exceptions.RequestException as e:
+        return f"Error: {e.response.text if e.response else 'Unknown error'}"
 
 
 def handle_cli() -> argparse.Namespace:
-    """Parse and validate CLI arguments for job application generator."""
+    """
+    Parse and validate CLI arguments for job application generator.
+
+    Returns:
+        Parsed command-line arguments namespace
+    """
     parser = argparse.ArgumentParser(
         description="""Assist the candidate in writing content for
         job application such as answering to question in application
