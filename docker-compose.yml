@@ -39,10 +39,14 @@ services:
     image: job-app-workflow:latest
     container_name: job-app-agent
     ports:
-      - "8000:8000"
+      - "7860:7860"
     environment:
-      - REDIS_URL=redis://redis:6379
-      - POSTGRES_URL=postgresql://postgres:postgres@postgres:5432/postgres
+      - PORT=7860
+      - LANGGRAPH_PORT=7860
+      - REDIS_URI=redis://redis:6379
+      - DATABASE_URI=postgresql://postgres:postgres@postgres:5432/postgres
+    env_file:
+      - .docker_env
     depends_on:
       redis:
         condition: service_healthy

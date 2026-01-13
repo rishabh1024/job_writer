@@ -37,7 +37,7 @@ class TavilyResearchTool:
         job_description,
         company_name,
         max_results=5,
-        model_name="cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+        model_name="mistralai/devstral-2512:free",
     ):
         # Create LLM inside __init__ (lazy initialization)
         llm_provider = LLMFactory()

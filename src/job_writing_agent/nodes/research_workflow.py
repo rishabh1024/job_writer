@@ -150,7 +150,7 @@ def company_research_data_summary(state: ResearchState) -> ResearchState:
 
         llm_provider = LLMFactory()
         llm = llm_provider.create_dspy(
-            model="cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+            model="mistralai/devstral-2512:free",
             provider="openrouter",
             temperature=0.3,
         )

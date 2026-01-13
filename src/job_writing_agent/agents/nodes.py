@@ -8,13 +8,14 @@ writer workflow graph, each handling a specific step in the process.
 # Standard library imports
 import logging
 from datetime import datetime
+from langgraph.types import interrupt
 
 # Third-party imports
 from langchain_core.messages import SystemMessage
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
 
 # Local imports
-from ..classes.classes import AppState, DataLoadState, ResearchState, ResultState
+from ..classes.classes import AppState, ResearchState, ResultState
 from ..prompts.templates import (
     BULLET_POINTS_PROMPT,
     COVER_LETTER_PROMPT,
@@ -40,7 +41,7 @@ def create_draft(state: ResearchState) -> ResultState:
     # Create LLM inside function (lazy initialization)
     llm_provider = LLMFactory()
     llm = llm_provider.create_langchain(
-        "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+        "mistralai/devstral-2512:free",
         provider="openrouter",
         temperature=0.3,
     )
@@ -97,7 +98,6 @@ def create_draft(state: ResearchState) -> ResultState:
         feedback="",
         critique_feedback="",
         current_node="create_draft",
-        company_research_data=company_background_information,
         output_data={},
     )
 
@@ -118,6 +118,7 @@ def critique_draft(state: ResultState) -> ResultState:
         draft_content = str(state.get("draft", ""))
         feedback = state.get("feedback", "")
         output_data = state.get("output_data", "")
+        current_node = state.get("current_node", "")
 
         # Debug logging to verify values
         logger.debug(f"Job description length: {len(job_description)}")
@@ -126,19 +127,12 @@ def critique_draft(state: ResultState) -> ResultState:
         # Early return if required fields are missing
         if not job_description or not draft_content:
             logger.warning("Missing job_description or draft in state")
-            return ResultState(
-                draft=draft_content,
-                feedback=feedback,
-                critique_feedback="",
-                current_node="critique",
-                company_research_data=company_research_data,
-                output_data=output_data,
-            )
+            return ResultState(**state, current_node=current_node)
 
         # Create LLM inside function (lazy initialization)
         llm_provider = LLMFactory()
         llm = llm_provider.create_langchain(
-            "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+            "mistralai/devstral-2512:free",
             provider="openrouter",
             temperature=0.3,
         )
@@ -160,20 +154,20 @@ def critique_draft(state: ResultState) -> ResultState:
         # Append HumanMessagePromptTemplate with variables (like line 97-124 in create_draft)
         critique_context_message = HumanMessagePromptTemplate.from_template(
             """
-    # Job Description
-    {job_description}
+            # Job Description
+            {job_description}
 
-    # Current Draft
-    {draft}
+            # Current Draft
+            {draft}
 
-    Critique this draft and suggest specific improvements. Focus on:
-    1. How well it targets the job requirements
-    2. Professional tone and language
-    3. Clarity and impact
-    4. Grammar and style
+            Critique this draft and suggest specific improvements. Focus on:
+            1. How well it targets the job requirements
+            2. Professional tone and language
+            3. Clarity and impact
+            4. Grammar and style
 
-    Return your critique in a constructive, actionable format.
-    """,
+            Return your critique in a constructive, actionable format.
+            """,
             input_variables=["job_description", "draft"],
         )
 
@@ -204,12 +198,7 @@ def critique_draft(state: ResultState) -> ResultState:
 
         # Store the critique - using validated variables from top of function
         return ResultState(
-            draft=draft_content,
-            feedback=feedback,
-            critique_feedback=critique_content,
-            current_node="critique",
-            company_research_data=company_research_data,
-            output_data=output_data,
+            **state, critique_feedback=critique_content, current_node=current_node
         )
 
     except Exception as e:
@@ -223,8 +212,6 @@ def human_approval(state: ResultState) -> ResultState:
     # Validate and extract all required state fields once
     draft_content = state.get("draft", "")
     critique_feedback_content = state.get("critique_feedback", "No critique available")
-    company_research_data = state.get("company_research_data", {})
-    output_data = state.get("output_data", "")
 
     # Display draft and critique for review
     print("\n" + "=" * 80)
@@ -236,25 +223,24 @@ def human_approval(state: ResultState) -> ResultState:
     print("\nPlease provide your feedback (press Enter to continue with no changes):")
 
     # In a real implementation, this would be handled by the UI
-    human_feedback = input()
-
-    return ResultState(
-        draft=draft_content,
-        feedback=human_feedback,
-        critique_feedback=critique_feedback_content,
-        current_node="human_approval",
-        company_research_data=company_research_data,
-        output_data=output_data,
+    human_feedback = interrupt(
+        {
+            "draft": draft_content,
+            "message": "Please review the draft and provide feedback (empty string to approve as-is)",
+        }
     )
 
+    print(f"Human feedback: {human_feedback}")
 
-def finalize_document(state: ResultState) -> DataLoadState:
+    return ResultState(**state, feedback=human_feedback, current_node="human_approval")
+
+
+def finalize_document(state: ResultState) -> ResultState:
     """Incorporate feedback and finalize the document."""
     # Validate and extract all required state fields once
     draft_content = state.get("draft", "")
     feedback_content = state.get("feedback", "")
     critique_feedback_content = state.get("critique_feedback", "")
-    company_research_data = state.get("company_research_data", {})
 
     if not draft_content:
         logger.warning("Missing draft in state for finalization")
@@ -262,7 +248,7 @@ def finalize_document(state: ResultState) -> DataLoadState:
     # Create LLM inside function (lazy initialization)
     llm_provider = LLMFactory()
     llm = llm_provider.create_langchain(
-        "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+        "mistralai/devstral-2512:free",
         provider="openrouter",
         temperature=0.3,
     )
@@ -287,16 +273,21 @@ def finalize_document(state: ResultState) -> DataLoadState:
         }
     )
 
+    print(
+        f"Final content: {final_content.content if hasattr(final_content, 'content') else final_content}"
+    )
+
     # Return final state using validated variables
-    return DataLoadState(
+    return ResultState(
         draft=draft_content,
         feedback=feedback_content,
         critique_feedback=critique_feedback_content,
-        company_research_data=company_research_data,
         current_node="finalize",
-        output_data=final_content.content
-        if hasattr(final_content, "content")
-        else str(final_content),
+        output_data=(
+            final_content.content
+            if hasattr(final_content, "content")
+            else final_content
+        ),
     )
 
 

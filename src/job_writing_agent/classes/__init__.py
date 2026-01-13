@@ -1,3 +1,17 @@
-from .classes import AppState, ResearchState, DataLoadState, ResultState
+from .classes import (
+    AppState,
+    ResearchState,
+    DataLoadState,
+    ResultState,
+    FormField,
+    FormFieldsExtraction,
+)
 
-__all__ = ["AppState", "ResearchState", "DataLoadState", "ResultState"]
+__all__ = [
+    "AppState",
+    "ResearchState",
+    "DataLoadState",
+    "ResultState",
+    "FormField",
+    "FormFieldsExtraction",
+]
