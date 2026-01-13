@@ -1,11 +1,9 @@
 {
-  "dependencies": [
-    "."
-  ],
+  "dependencies": ["."],
   "graphs": {
-    "job_app_graph": "./src/job_writing_agent/workflow.py:job_app_graph",
-    "research_workflow": "./src/job_writing_agent/nodes/research_workflow.py:research_workflow",
-    "data_loading_workflow": "./src/job_writing_agent/nodes/data_loading_workflow.py:data_loading_workflow"
+    "job_app_graph": "src/job_writing_agent/workflow.py:job_app_graph",
+    "research_workflow": "src/job_writing_agent/nodes/research_workflow.py:research_workflow",
+    "data_loading_workflow": "src/job_writing_agent/nodes/data_loading_workflow.py:data_loading_workflow"
   },
   "env": "./app_env",
   "python_version": "3.12"

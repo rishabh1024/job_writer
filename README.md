@@ -1,3 +1,13 @@
+---
+title: Job Application Writer
+emoji: 📝
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Job Writer Module
 
 A modular, well-structured package for creating tailored job applications using LangChain and LangGraph with LangSmith observability.

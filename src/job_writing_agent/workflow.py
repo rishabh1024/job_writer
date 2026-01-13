@@ -143,7 +143,7 @@ class JobWorkflow:
         )
 
     @cached_property
-    def job_app_graph(self) -> StateGraph:
+    def job_app_graph(self) -> CompiledStateGraph:
         """
         Build and configure the job application workflow graph.
 
@@ -197,7 +197,9 @@ class JobWorkflow:
         agent_workflow_graph.add_edge("critique", "human_approval")
         agent_workflow_graph.add_edge("human_approval", "finalize")
 
-        return agent_workflow_graph
+        job_app_graph = agent_workflow_graph.compile()
+
+        return job_app_graph
 
     def _get_callbacks(self) -> list:
         """
@@ -258,7 +260,7 @@ class JobWorkflow:
             in the "output_data" field, or None if execution fails.
         """
         try:
-            compiled_graph = self.compile()
+            compiled_graph = self.job_app_graph
         except Exception as e:
             logger.error("Error compiling graph: %s", e, exc_info=True)
             return None
@@ -308,24 +310,72 @@ class JobWorkflow:
             logger.error("Error running graph: %s", e, exc_info=True)
             return None
 
-    @log_execution
-    @log_errors
-    def compile(self) -> CompiledStateGraph:
-        """
-        Compile the workflow graph into an executable state machine.
 
-        Returns
-        -------
-        CompiledStateGraph
-            Compiled LangGraph state machine ready for execution.
+# At the bottom of workflow.py, after the JobWorkflow class definition
 
-        Raises
-        ------
-        Exception
-            If graph compilation fails (e.g., invalid edges, missing nodes).
-        """
-        compiled_graph = self.job_app_graph.compile()
-        return compiled_graph
+
+def build_job_app_graph() -> CompiledStateGraph:
+    """
+    Build and compile the job application workflow graph.
+
+    This function creates the graph structure independent of runtime inputs.
+    Actual runtime values (resume, job description) come from the state
+    passed during invocation.
+    """
+
+    # Helper function for the adapter (since we can't use instance methods)
+    def dataload_to_research_adapter(state: DataLoadState) -> ResearchState:
+        logger.info("Adapter for converting DataLoadState to ResearchState")
+        return ResearchState(
+            company_research_data=state.get("company_research_data", {}),
+            attempted_search_queries=[],
+            current_node="",
+            content_category=state.get("content_category", ""),
+            messages=state.get("messages", []),
+        )
+
+    # Helper function for routing
+    def route_after_load(state: DataLoadState) -> str:
+        next_node = state.get("next_node", "research")
+        logger.info(f"Routing after load: {next_node}")
+        return next_node
+
+    # Build the graph
+    agent_workflow_graph = StateGraph(DataLoadState)
+
+    # Add nodes
+    agent_workflow_graph.add_node("load", data_loading_workflow)
+    agent_workflow_graph.add_node("to_research_adapter", dataload_to_research_adapter)
+    agent_workflow_graph.add_node("research", research_workflow)
+    agent_workflow_graph.add_node("create_draft", create_draft)
+    agent_workflow_graph.add_node("critique", critique_draft)
+    agent_workflow_graph.add_node("human_approval", human_approval)
+    agent_workflow_graph.add_node("finalize", finalize_document)
+
+    # Set entry and exit
+    agent_workflow_graph.set_entry_point("load")
+    agent_workflow_graph.set_finish_point("finalize")
+
+    # Add edges
+    agent_workflow_graph.add_conditional_edges(
+        "load",
+        route_after_load,
+        {
+            "load": "load",
+            "research": "to_research_adapter",
+        },
+    )
+    agent_workflow_graph.add_edge("to_research_adapter", "research")
+    agent_workflow_graph.add_edge("research", "create_draft")
+    agent_workflow_graph.add_edge("create_draft", "critique")
+    agent_workflow_graph.add_edge("critique", "human_approval")
+    agent_workflow_graph.add_edge("human_approval", "finalize")
+
+    return agent_workflow_graph.compile()
+
+
+# Export at module level for LangGraph deployment
+job_app_graph = build_job_app_graph()
 
 
 def main():
@@ -336,12 +386,12 @@ def main():
         content=args.content_type,
     )
     result = asyncio.run(workflow.run())
-    if result:
-        print_result(args.content_type, result["output_data"])
-        save_result(args.content_type, result["output_data"])
+    if result and hasattr(result, "output_data"):
+        print_result(args.content_type, result.get("output_data", ""))
+        save_result(args.content_type, result.get("output_data", ""))
         print("Workflow completed successfully.")
     else:
-        print("Error running workflow.")
+        print("Error running workflow. No output data available.")
         sys.exit(1)
 
 

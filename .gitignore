@@ -35,7 +35,14 @@ __pycache__/
 *.py[cod]
 *.pyc
 
-# Git backup
-src/.git_backup
+.vscode/*
+.cursor/*
 src/job_writing_agent.egg-info/*
-
+pyrightconfig.json
+app_env/*
+requirements.txt
+.langgraph_api/*
+.src/job_writing_agent/logs/*
+docker-compose.override.example.yml
+DOCKERFILE_EXPLANATION.md
+DEPLOYMENT_GUIDE.md
