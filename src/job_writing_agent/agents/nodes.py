@@ -94,11 +94,13 @@ def create_draft(state: ResearchState) -> ResultState:
     logger.info(f"Draft has been created: {response.content}")
 
     app_state = ResultState(
-        draft=response.content,
+        draft=str(response.content),
         feedback="",
         critique_feedback="",
         current_node="create_draft",
-        output_data={},
+        output_data="",
+        company_research_data=state.get("company_research_data", {}),
+        messages=state.get("messages", []),
     )
 
     return app_state
@@ -116,9 +118,6 @@ def critique_draft(state: ResultState) -> ResultState:
         company_research_data = state.get("company_research_data", {})
         job_description = str(company_research_data.get("job_description", ""))
         draft_content = str(state.get("draft", ""))
-        feedback = state.get("feedback", "")
-        output_data = state.get("output_data", "")
-        current_node = state.get("current_node", "")
 
         # Debug logging to verify values
         logger.debug(f"Job description length: {len(job_description)}")
@@ -126,8 +125,16 @@ def critique_draft(state: ResultState) -> ResultState:
 
         # Early return if required fields are missing
         if not job_description or not draft_content:
-            logger.warning("Missing job_description or draft in state")
-            return ResultState(**state, current_node=current_node)
+            logger.warning("Missing content for critique in state")
+            return ResultState(
+                draft=state.get("draft", ""),
+                feedback=state.get("feedback", ""),
+                critique_feedback="",
+                current_node="critique",
+                output_data="",
+                company_research_data=state.get("company_research_data", {}),
+                messages=state.get("messages", []),
+            )
 
         # Create LLM inside function (lazy initialization)
         llm_provider = LLMFactory()
@@ -198,7 +205,13 @@ def critique_draft(state: ResultState) -> ResultState:
 
         # Store the critique - using validated variables from top of function
         return ResultState(
-            **state, critique_feedback=critique_content, current_node=current_node
+            draft=state.get("draft", ""),
+            feedback=state.get("feedback", ""),
+            critique_feedback=str(critique_content),
+            current_node="critique",
+            output_data="",
+            company_research_data=state.get("company_research_data", {}),
+            messages=state.get("messages", []),
         )
 
     except Exception as e:
@@ -232,7 +245,15 @@ def human_approval(state: ResultState) -> ResultState:
 
     print(f"Human feedback: {human_feedback}")
 
-    return ResultState(**state, feedback=human_feedback, current_node="human_approval")
+    return ResultState(
+        draft=state.get("draft", ""),
+        feedback=human_feedback,
+        critique_feedback=state.get("critique_feedback", ""),
+        current_node="human_approval",
+        output_data="",
+        company_research_data=state.get("company_research_data", {}),
+        messages=state.get("messages", []),
+    )
 
 
 def finalize_document(state: ResultState) -> ResultState:
@@ -278,16 +299,20 @@ def finalize_document(state: ResultState) -> ResultState:
     )
 
     # Return final state using validated variables
+    # Current (INCOMPLETE):
+
     return ResultState(
         draft=draft_content,
         feedback=feedback_content,
         critique_feedback=critique_feedback_content,
         current_node="finalize",
         output_data=(
-            final_content.content
+            str(final_content.content)
             if hasattr(final_content, "content")
-            else final_content
+            else str(final_content)
         ),
+        company_research_data=state.get("company_research_data", {}),
+        messages=state.get("messages", []),
     )
 
 
