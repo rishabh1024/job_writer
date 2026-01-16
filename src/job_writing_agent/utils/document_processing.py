@@ -416,17 +416,17 @@ async def parse_job_description_from_url(url: str) -> Document:
             if not cerebras_api_key:
                 raise ValueError("CEREBRAS_API_KEY environment variable not set")
 
-            dspy.configure(
+            # Use dspy.context() for async tasks instead of dspy.configure()
+            with dspy.context(
                 lm=dspy.LM(
                     "cerebras/qwen-3-32b",
                     api_key=cerebras_api_key,
                     temperature=0.1,
                     max_tokens=60000,  # Note: This max_tokens is unusually high
                 )
-            )
-
-            job_extract_fn = dspy.Predict(ExtractJobDescription)
-            result = job_extract_fn(job_description_html_content=raw_content)
+            ):
+                job_extract_fn = dspy.Predict(ExtractJobDescription)
+                result = job_extract_fn(job_description_html_content=raw_content)
             logger.info("Successfully processed job description with LLM.")
 
             # 4. Create the final Document with structured data
