@@ -258,11 +258,46 @@ def _is_heading(line: str) -> bool:
     return line.isupper() and len(line.split()) <= 5 and not re.search(r"\d", line)
 
 
-def parse_resume(file_path: str | Path) -> list[Document]:
+def parse_resume(file_path_or_url: str | Path) -> list[Document]:
     """
-    Load a résumé from PDF or TXT file → list[Document] chunks
+    Load a résumé from PDF or TXT file or URL → list[Document] chunks
     (≈400 chars, 50‑char overlap) with {source, section} metadata.
+    
+    Supports:
+    - Local file paths: "/path/to/resume.pdf"
+    - URLs: "https://example.com/resume.pdf" or "s3://bucket/resume.pdf"
     """
+    import tempfile
+    import urllib.request
+    
+    # Handle URLs
+    file_path = str(file_path_or_url)
+    is_url = file_path.startswith(("http://", "https://", "s3://", "gs://"))
+    tmp_file_path = None
+    
+    if is_url:
+        logger.info(f"Downloading resume from URL: {file_path}")
+        # Create temporary file for downloaded resume
+        file_extension = Path(urlparse(file_path).path).suffix.lower()
+        if not file_extension:
+            file_extension = ".pdf"  # Default to PDF if extension not in URL
+        
+        tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=file_extension)
+        tmp_file_path = tmp_file.name
+        tmp_file.close()
+        
+        try:
+            # Download file from URL
+            urllib.request.urlretrieve(file_path, tmp_file_path)
+            file_path = tmp_file_path
+            logger.info(f"Resume downloaded to temporary file: {file_path}")
+        except Exception as e:
+            # Clean up temp file on error
+            if tmp_file_path and os.path.exists(tmp_file_path):
+                os.unlink(tmp_file_path)
+            logger.error(f"Failed to download resume from URL: {e}")
+            raise ValueError(f"Could not download resume from URL {file_path_or_url}: {e}")
+    
     file_extension = Path(file_path).suffix.lower()
 
     # Handle different file types
@@ -301,8 +336,18 @@ def parse_resume(file_path: str | Path) -> list[Document]:
             for chunk in splitter.split_text(md_text)
         ]  # Attach metadata
     for doc in chunks:
-        doc.metadata.setdefault("source", str(file_path))
+        # Use original source (URL or path) in metadata, not temp file path
+        doc.metadata.setdefault("source", str(file_path_or_url))
         # section already present if header‑splitter was used
+    
+    # Clean up temporary file if it was downloaded from URL
+    if tmp_file_path and os.path.exists(tmp_file_path):
+        try:
+            os.unlink(tmp_file_path)
+            logger.debug(f"Cleaned up temporary file: {tmp_file_path}")
+        except Exception as e:
+            logger.warning(f"Failed to clean up temporary file {tmp_file_path}: {e}")
+    
     return chunks
 
 
