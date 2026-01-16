@@ -46,3 +46,13 @@ requirements.txt
 docker-compose.override.example.yml
 DOCKERFILE_EXPLANATION.md
 DEPLOYMENT_GUIDE.md
+
+# Binary files (PDFs, images, etc.)
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.zip
+*.tar
+*.gz
