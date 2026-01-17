@@ -34,9 +34,19 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Install Playwright system dependencies (after playwright package is installed)
 RUN playwright install-deps chromium
 
-# Install Playwright browser binaries (with cache mount)
+# Create user's cache directory for Playwright browsers (BEFORE installing browsers)
+# This ensures browsers are installed to the correct location that persists in the image
+RUN mkdir -p /home/hf_user/.cache/ms-playwright && \
+  chown -R hf_user:hf_user /home/hf_user/.cache
+
+# Install Playwright browser binaries to user's home directory
+# Set PLAYWRIGHT_BROWSERS_PATH to ensure browsers are installed to the right location
+# Use cache mount ONLY for the download cache, but install to persistent location
 RUN --mount=type=cache,target=/root/.cache/ms-playwright \
-  playwright install chromium
+  PLAYWRIGHT_BROWSERS_PATH=/home/hf_user/.cache/ms-playwright \
+  playwright install chromium && \
+  # Fix ownership after installation (browsers are installed as root)
+  chown -R hf_user:hf_user /home/hf_user/.cache/ms-playwright
 
 # Create API directories and install langgraph-api as ROOT
 RUN mkdir -p /api/langgraph_api /api/langgraph_runtime /api/langgraph_license && \
@@ -71,7 +81,9 @@ ENV HOME=/home/hf_user \
   # Package-specific cache directories (for packages that don't fully respect XDG)
   TIKTOKEN_CACHE_DIR=/home/hf_user/.cache/tiktoken \
   HF_HOME=/home/hf_user/.cache/huggingface \
-  TORCH_HOME=/home/hf_user/.cache/torch
+  TORCH_HOME=/home/hf_user/.cache/torch \
+  # Playwright browsers path (so it knows where to find browsers at runtime)
+  PLAYWRIGHT_BROWSERS_PATH=/home/hf_user/.cache/ms-playwright
 
 WORKDIR /deps/job_writer
 
