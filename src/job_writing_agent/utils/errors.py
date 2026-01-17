@@ -18,3 +18,8 @@ class LLMProcessingError(Exception):
 class JobDescriptionParsingError(Exception):
     """Base class for job description parsing errors."""
     pass
+
+
+class ResumeDownloadError(Exception):
+    """Raised when a resume file cannot be downloaded from a URL."""
+    pass

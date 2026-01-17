@@ -7,9 +7,13 @@ the resume file and returning the resume in the required format.
 """
 
 import logging
-from typing import Callable, Any, Optional
+from pathlib import Path
+from typing import Any, Callable, Optional
 
-from job_writing_agent.utils.document_processing import parse_resume
+from job_writing_agent.utils.document_processing import (
+    get_resume as get_resume_docs,
+    parse_resume,
+)
 from job_writing_agent.utils.logging.logging_decorators import (
     log_async,
     log_errors,
@@ -55,8 +59,8 @@ class ResumeLoader:
         Parameters
         ----------
         resume_source: Any
-            Path or file-like object accepted by the parser function.
-            Can be a file path, URL, or file-like object.
+            Path, URL, or file-like object. Supports local paths, HTTP/HTTPS URLs,
+            and HuggingFace Hub dataset references (e.g., "username/dataset::resume.pdf").
 
         Returns
         -------
@@ -74,7 +78,10 @@ class ResumeLoader:
         resume_text = ""
         assert resume_source is not None, "resume_source cannot be None"
 
-        resume_chunks = self._parser(resume_source)
+        if isinstance(resume_source, (str, Path)):
+            resume_chunks = await get_resume_docs(resume_source)
+        else:
+            resume_chunks = self._parser(resume_source)
 
         for chunk in resume_chunks:
             if hasattr(chunk, "page_content") and chunk.page_content:
