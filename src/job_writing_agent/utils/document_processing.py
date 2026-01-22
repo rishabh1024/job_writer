@@ -3,6 +3,7 @@ Document processing utilities for parsing resumes and job descriptions.
 """
 
 # Standard library imports
+<<<<<<< HEAD
 import asyncio
 import logging
 import os
@@ -10,12 +11,21 @@ import re
 import tempfile
 from pathlib import Path
 from typing import Optional
+=======
+import logging
+import os
+import re
+from pathlib import Path
+>>>>>>> 64d45e6aae112e37b1f8aa7e8180959a0b9cac27
 from urllib.parse import urlparse
 
 # Third-party imports
 import dspy
+<<<<<<< HEAD
 import httpx
 from huggingface_hub import hf_hub_download
+=======
+>>>>>>> 64d45e6aae112e37b1f8aa7e8180959a0b9cac27
 from langchain_community.document_loaders import PyPDFLoader, AsyncChromiumLoader
 from langchain_community.document_transformers import Html2TextTransformer
 from langchain_core.documents import Document
@@ -28,12 +38,16 @@ from pydantic import BaseModel, Field
 from typing_extensions import Any
 
 # Local imports
+<<<<<<< HEAD
 from .errors import (
     JobDescriptionParsingError,
     LLMProcessingError,
     ResumeDownloadError,
     URLExtractionError,
 )
+=======
+from .errors import JobDescriptionParsingError, LLMProcessingError, URLExtractionError
+>>>>>>> 64d45e6aae112e37b1f8aa7e8180959a0b9cac27
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -268,6 +282,7 @@ def _is_heading(line: str) -> bool:
     return line.isupper() and len(line.split()) <= 5 and not re.search(r"\d", line)
 
 
+<<<<<<< HEAD
 def _is_huggingface_hub_url(url: str) -> tuple[bool, Optional[str], Optional[str]]:
     """
     Detect if URL or string is a HuggingFace Hub reference and extract repo_id and filename.
@@ -424,6 +439,8 @@ async def download_file_from_url(
         raise ResumeDownloadError(f"Could not save file from {url}: {e}") from e
 
 
+=======
+>>>>>>> 64d45e6aae112e37b1f8aa7e8180959a0b9cac27
 def parse_resume(file_path: str | Path) -> list[Document]:
     """
     Load a résumé from PDF or TXT file → list[Document] chunks
@@ -472,6 +489,7 @@ def parse_resume(file_path: str | Path) -> list[Document]:
     return chunks
 
 
+<<<<<<< HEAD
 async def get_resume(file_path_or_url: str | Path) -> list[Document]:
     """
     Load a résumé from a local file path or URL.
@@ -514,6 +532,8 @@ async def get_resume(file_path_or_url: str | Path) -> list[Document]:
     )
 
 
+=======
+>>>>>>> 64d45e6aae112e37b1f8aa7e8180959a0b9cac27
 async def get_job_description(file_path_or_url: str) -> Document:
     """Parse a job description from a file or URL into chunks.
 

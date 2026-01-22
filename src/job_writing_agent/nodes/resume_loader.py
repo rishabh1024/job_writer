@@ -7,6 +7,7 @@ the resume file and returning the resume in the required format.
 """
 
 import logging
+<<<<<<< HEAD
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -14,6 +15,11 @@ from job_writing_agent.utils.document_processing import (
     get_resume as get_resume_docs,
     parse_resume,
 )
+=======
+from typing import Callable, Any, Optional
+
+from job_writing_agent.utils.document_processing import parse_resume
+>>>>>>> 64d45e6aae112e37b1f8aa7e8180959a0b9cac27
 from job_writing_agent.utils.logging.logging_decorators import (
     log_async,
     log_errors,
@@ -59,8 +65,13 @@ class ResumeLoader:
         Parameters
         ----------
         resume_source: Any
+<<<<<<< HEAD
             Path, URL, or file-like object. Supports local paths, HTTP/HTTPS URLs,
             and HuggingFace Hub dataset references (e.g., "username/dataset::resume.pdf").
+=======
+            Path or file-like object accepted by the parser function.
+            Can be a file path, URL, or file-like object.
+>>>>>>> 64d45e6aae112e37b1f8aa7e8180959a0b9cac27
 
         Returns
         -------
@@ -78,10 +89,14 @@ class ResumeLoader:
         resume_text = ""
         assert resume_source is not None, "resume_source cannot be None"
 
+<<<<<<< HEAD
         if isinstance(resume_source, (str, Path)):
             resume_chunks = await get_resume_docs(resume_source)
         else:
             resume_chunks = self._parser(resume_source)
+=======
+        resume_chunks = self._parser(resume_source)
+>>>>>>> 64d45e6aae112e37b1f8aa7e8180959a0b9cac27
 
         for chunk in resume_chunks:
             if hasattr(chunk, "page_content") and chunk.page_content:
