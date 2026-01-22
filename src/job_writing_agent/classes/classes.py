@@ -1,7 +1,7 @@
 """
 State definitions for the Job Writer LangGraph Workflow.
 """
-
+from enum import StrEnum
 from typing import Annotated
 from typing_extensions import List, Dict, Any
 from langgraph.graph import MessagesState
@@ -118,3 +118,40 @@ class ResultState(MessagesState):
     current_node: str
     company_research_data: Dict[str, Any]
     output_data: str
+
+class NodeName(StrEnum):
+    """Node names for the job application workflow graph."""
+    LOAD = "load"
+    RESEARCH_SUBGRAPH_ADAPTER = "to_research_adapter"
+    RESEARCH = "research"
+    CREATE_DRAFT = "create_draft"
+    CRITIQUE = "critique"
+    HUMAN_APPROVAL = "human_approval"
+    FINALIZE = "finalize"
+
+
+def dataload_to_research_adapter(state: DataLoadState) -> ResearchState:
+    """
+    Adapter to convert DataLoadState to ResearchState.
+
+    Extracts only fields needed for research workflow following the
+    adapter pattern recommended by LangGraph documentation.
+
+    Parameters
+    ----------
+    state: DataLoadState
+        Current workflow state with loaded data.
+
+    Returns
+    -------
+    ResearchState
+        State formatted for research subgraph with required fields.
+    """
+
+    return ResearchState(
+        company_research_data=state.get("company_research_data", {}),
+        attempted_search_queries=[],
+        current_node="",
+        content_category=state.get("content_category", ""),
+        messages=state.get("messages", []),
+    )

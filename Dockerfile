@@ -10,7 +10,7 @@ ENV PYTHONUNBUFFERED=1 \
 # Create user with UID 1000 for HuggingFace Spaces compatibility
 RUN useradd -m -u 1000 hf_user
 
-ENV LANGSERVE_GRAPHS='{"job_app_graph": "/deps/job_writer/src/job_writing_agent/workflow.py:job_app_graph", "research_workflow": "/deps/job_writer/src/job_writing_agent/nodes/research_workflow.py:research_workflow", "data_loading_workflow": "/deps/job_writer/src/job_writing_agent/nodes/data_loading_workflow.py:data_loading_workflow"}'
+ENV LANGSERVE_GRAPHS='{"job_app_graph": "/deps/job_writer/src/job_writing_agent/graph/agent_workflow_graph.py:job_app_graph", "research_workflow": "/deps/job_writer/src/job_writing_agent/nodes/research_workflow.py:research_workflow", "data_loading_workflow": "/deps/job_writer/src/job_writing_agent/nodes/data_loading_workflow.py:data_loading_workflow"}'
 
 # Copy package metadata and structure files (needed for editable install)
 COPY --chown=hf_user:hf_user pyproject.toml langgraph.json README.md /deps/job_writer/
@@ -34,7 +34,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Install Playwright system dependencies (after playwright package is installed)
 RUN playwright install-deps chromium
 
-<<<<<<< HEAD
 # Create user's cache directory for Playwright browsers (BEFORE installing browsers)
 # This ensures browsers are installed to the correct location that persists in the image
 RUN mkdir -p /home/hf_user/.cache/ms-playwright && \
@@ -48,11 +47,6 @@ RUN --mount=type=cache,target=/root/.cache/ms-playwright \
   playwright install chromium && \
   # Fix ownership after installation (browsers are installed as root)
   chown -R hf_user:hf_user /home/hf_user/.cache/ms-playwright
-=======
-# Install Playwright browser binaries (with cache mount)
-RUN --mount=type=cache,target=/root/.cache/ms-playwright \
-  playwright install chromium
->>>>>>> 64d45e6aae112e37b1f8aa7e8180959a0b9cac27
 
 # Create API directories and install langgraph-api as ROOT
 RUN mkdir -p /api/langgraph_api /api/langgraph_runtime /api/langgraph_license && \
@@ -87,13 +81,10 @@ ENV HOME=/home/hf_user \
   # Package-specific cache directories (for packages that don't fully respect XDG)
   TIKTOKEN_CACHE_DIR=/home/hf_user/.cache/tiktoken \
   HF_HOME=/home/hf_user/.cache/huggingface \
-<<<<<<< HEAD
   TORCH_HOME=/home/hf_user/.cache/torch \
   # Playwright browsers path (so it knows where to find browsers at runtime)
   PLAYWRIGHT_BROWSERS_PATH=/home/hf_user/.cache/ms-playwright
-=======
-  TORCH_HOME=/home/hf_user/.cache/torch
->>>>>>> 64d45e6aae112e37b1f8aa7e8180959a0b9cac27
+
 
 WORKDIR /deps/job_writer
 

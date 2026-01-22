@@ -3,29 +3,14 @@ Document processing utilities for parsing resumes and job descriptions.
 """
 
 # Standard library imports
-<<<<<<< HEAD
-import asyncio
-import logging
-import os
-import re
-import tempfile
-from pathlib import Path
-from typing import Optional
-=======
 import logging
 import os
 import re
 from pathlib import Path
->>>>>>> 64d45e6aae112e37b1f8aa7e8180959a0b9cac27
 from urllib.parse import urlparse
 
 # Third-party imports
 import dspy
-<<<<<<< HEAD
-import httpx
-from huggingface_hub import hf_hub_download
-=======
->>>>>>> 64d45e6aae112e37b1f8aa7e8180959a0b9cac27
 from langchain_community.document_loaders import PyPDFLoader, AsyncChromiumLoader
 from langchain_community.document_transformers import Html2TextTransformer
 from langchain_core.documents import Document
@@ -38,16 +23,7 @@ from pydantic import BaseModel, Field
 from typing_extensions import Any
 
 # Local imports
-<<<<<<< HEAD
-from .errors import (
-    JobDescriptionParsingError,
-    LLMProcessingError,
-    ResumeDownloadError,
-    URLExtractionError,
-)
-=======
 from .errors import JobDescriptionParsingError, LLMProcessingError, URLExtractionError
->>>>>>> 64d45e6aae112e37b1f8aa7e8180959a0b9cac27
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -282,165 +258,6 @@ def _is_heading(line: str) -> bool:
     return line.isupper() and len(line.split()) <= 5 and not re.search(r"\d", line)
 
 
-<<<<<<< HEAD
-def _is_huggingface_hub_url(url: str) -> tuple[bool, Optional[str], Optional[str]]:
-    """
-    Detect if URL or string is a HuggingFace Hub reference and extract repo_id and filename.
-
-    Args:
-        url: URL or string to check (e.g., "https://huggingface.co/datasets/username/dataset/resolve/main/file.pdf"
-            or "username/dataset-name::resume.pdf")
-
-    Returns:
-        Tuple of (is_hf_url, repo_id, filename). Returns (False, None, None) if not HF Hub.
-    """
-    if not url or not isinstance(url, str):
-        return (False, None, None)
-
-    # Custom format: "username/dataset-name::filename"
-    if "::" in url and not url.startswith(("http://", "https://")):
-        parts = url.split("::", 1)
-        if len(parts) == 2 and "/" in parts[0] and parts[1].strip():
-            return (True, parts[0].strip(), parts[1].strip())
-        return (False, None, None)
-
-    # HF Hub URL patterns
-    if not url.startswith(("http://", "https://")):
-        return (False, None, None)
-
-    parsed = urlparse(url)
-    if "huggingface.co" not in parsed.netloc:
-        return (False, None, None)
-
-    # Pattern: /datasets/{username}/{dataset}/resolve/main/{filename}
-    # Pattern: /datasets/{username}/{dataset}/blob/main/{filename}
-    # Pattern: /{username}/{dataset}/resolve/main/{filename} (models)
-    match = re.match(
-        r"^/(?:datasets/)?([^/]+)/([^/]+)/(?:resolve|blob)/[^/]+/(.+)$",
-        parsed.path,
-    )
-    if match:
-        repo_id = f"{match.group(1)}/{match.group(2)}"
-        filename = match.group(3)
-        return (True, repo_id, filename)
-
-    return (False, None, None)
-
-
-async def download_file_from_hf_hub(
-    repo_id: str,
-    filename: str,
-    repo_type: str = "dataset",
-    token: Optional[str] = None,
-    cache_dir: Optional[Path] = None,
-) -> Path:
-    """
-    Download a file from HuggingFace Hub dataset or repository.
-
-    Uses the huggingface_hub library with authentication and caching support.
-
-    Args:
-        repo_id: HF Hub repository ID (e.g., "username/dataset-name").
-        filename: Name of the file to download (e.g., "resume.pdf").
-        repo_type: Type of repository ("dataset" or "model"). Defaults to "dataset".
-        token: Optional HF API token. If None, uses HUGGINGFACE_API_KEY env var.
-        cache_dir: Optional cache directory. Defaults to HF_HOME env var or system temp.
-
-    Returns:
-        Path to the downloaded file (from cache or new download).
-
-    Raises:
-        ValueError: If repo_id or filename is invalid.
-        ResumeDownloadError: If download fails.
-    """
-    if not repo_id or not isinstance(repo_id, str) or "/" not in repo_id:
-        raise ValueError(
-            f"Invalid repo_id: {repo_id}. Expected format: username/dataset-name"
-        )
-    if not filename or not isinstance(filename, str) or not filename.strip():
-        raise ValueError("filename must be a non-empty string")
-
-    hf_token = token or os.getenv("HUGGINGFACE_API_KEY")
-    cache = (
-        str(cache_dir) if cache_dir else os.getenv("HF_HOME") or tempfile.gettempdir()
-    )
-
-    def _download() -> str:
-        return hf_hub_download(
-            repo_id=repo_id,
-            filename=filename.strip(),
-            repo_type=repo_type,
-            token=hf_token,
-            cache_dir=cache,
-        )
-
-    try:
-        logger.info("Downloading %s from HF Hub repo %s", filename, repo_id)
-        local_path = await asyncio.to_thread(_download)
-        logger.info("Downloaded resume to %s", local_path)
-        return Path(local_path)
-    except Exception as e:
-        logger.error("Failed to download from HF Hub: %s", e)
-        raise ResumeDownloadError(
-            f"Could not download {filename} from {repo_id}: {e}"
-        ) from e
-
-
-async def download_file_from_url(
-    url: str,
-    save_dir: Optional[Path] = None,
-    filename: Optional[str] = None,
-) -> Path:
-    """
-    Download a file from an HTTP/HTTPS URL to a local temporary location.
-
-    Handles generic web URLs (GitHub raw files, public cloud storage, etc.).
-    For HuggingFace Hub, use download_file_from_hf_hub() instead.
-
-    Args:
-        url: The URL to download from (must start with http:// or https://).
-        save_dir: Optional directory to save file. Defaults to system temp directory.
-        filename: Optional filename. If not provided, inferred from URL or uses temp name.
-
-    Returns:
-        Path to the downloaded file.
-
-    Raises:
-        ValueError: If URL format is invalid.
-        ResumeDownloadError: If download fails.
-    """
-    parsed = urlparse(url)
-    if not parsed.scheme or not parsed.netloc or parsed.scheme not in ("http", "https"):
-        raise ValueError("URL must start with http:// or https://")
-
-    save_dir = save_dir or Path(tempfile.gettempdir())
-    save_dir.mkdir(parents=True, exist_ok=True)
-
-    if not filename:
-        filename = Path(parsed.path).name or "resume.pdf"
-
-    local_path = save_dir / filename
-    logger.info("Downloading resume from URL: %s", url)
-
-    try:
-        async with httpx.AsyncClient(follow_redirects=True) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            local_path.write_bytes(response.content)
-        logger.info("Downloaded resume to %s", local_path)
-        return local_path
-    except httpx.HTTPError as e:
-        logger.error("HTTP error downloading from %s: %s", url, e)
-        if local_path.exists():
-            local_path.unlink(missing_ok=True)
-        raise ResumeDownloadError(f"Could not download from {url}: {e}") from e
-    except OSError as e:
-        logger.error("Error writing file from %s: %s", url, e)
-        raise ResumeDownloadError(f"Could not save file from {url}: {e}") from e
-
-
-=======
->>>>>>> 64d45e6aae112e37b1f8aa7e8180959a0b9cac27
 def parse_resume(file_path: str | Path) -> list[Document]:
     """
     Load a résumé from PDF or TXT file → list[Document] chunks
@@ -489,51 +306,6 @@ def parse_resume(file_path: str | Path) -> list[Document]:
     return chunks
 
 
-<<<<<<< HEAD
-async def get_resume(file_path_or_url: str | Path) -> list[Document]:
-    """
-    Load a résumé from a local file path or URL.
-
-    Handles both local files and URLs by downloading if needed, then delegating
-    to parse_resume() for parsing. Supports HuggingFace Hub datasets and
-    generic HTTP/HTTPS URLs.
-
-    Args:
-        file_path_or_url: Local file path, HF Hub reference, or URL.
-            Examples:
-            - Local: "/path/to/resume.pdf"
-            - HF Hub URL: "https://huggingface.co/datasets/username/dataset/resolve/main/resume.pdf"
-            - HF Hub format: "username/dataset-name::resume.pdf"
-            - Generic HTTP: "https://example.com/resume.pdf"
-
-    Returns:
-        List of Document chunks with resume content.
-
-    Raises:
-        ResumeDownloadError: If URL download fails.
-        ValueError: If file path is invalid or unsupported format.
-    """
-    source = str(file_path_or_url)
-
-    # 1. Check if HuggingFace Hub URL or custom format
-    is_hf, repo_id, filename = _is_huggingface_hub_url(source)
-    if is_hf and repo_id and filename:
-        local_path = await download_file_from_hf_hub(repo_id=repo_id, filename=filename)
-        return parse_resume(local_path)
-
-    # 2. Check if generic HTTP/HTTPS URL
-    if source.startswith(("http://", "https://")):
-        local_path = await download_file_from_url(source)
-        return parse_resume(local_path)
-
-    # 3. Treat as local file path
-    return parse_resume(
-        Path(source) if isinstance(file_path_or_url, str) else file_path_or_url
-    )
-
-
-=======
->>>>>>> 64d45e6aae112e37b1f8aa7e8180959a0b9cac27
 async def get_job_description(file_path_or_url: str) -> Document:
     """Parse a job description from a file or URL into chunks.
 
