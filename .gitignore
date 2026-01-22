@@ -46,6 +46,7 @@ requirements.txt
 docker-compose.override.example.yml
 DOCKERFILE_EXPLANATION.md
 DEPLOYMENT_GUIDE.md
+<<<<<<< HEAD
 ./src/job_writing_agent/logs/*.log
 
 # Binary files (PDFs, images, etc.)
@@ -57,3 +58,5 @@ DEPLOYMENT_GUIDE.md
 *.zip
 *.tar
 *.gz
+=======
+>>>>>>> 64d45e6aae112e37b1f8aa7e8180959a0b9cac27
