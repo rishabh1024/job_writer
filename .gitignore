@@ -59,3 +59,10 @@ DEPLOYMENT_GUIDE.md
 *.tar
 *.gz
 .\resume.pdf
+
+# Database files
+*.sqlite3
+*.db
+*.bin
+chroma/
+demo_chroma_db/
