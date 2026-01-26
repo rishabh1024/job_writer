@@ -40,6 +40,7 @@ __pycache__/
 src/job_writing_agent.egg-info/*
 pyrightconfig.json
 app_env/*
+.docker_env
 requirements.txt
 .langgraph_api/*
 .src/job_writing_agent/logs/*
