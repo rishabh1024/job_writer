@@ -8,7 +8,7 @@ Principle by focusing solely on system message initialization.
 """
 
 import logging
-from typing import Optional
+from typing import Optional, Any
 
 from langchain_core.messages import SystemMessage
 
@@ -45,7 +45,7 @@ class SystemInitializer:
         self._system_prompt = system_prompt or agent_system_prompt
 
     @log_async
-    async def set_agent_system_message(self, state: DataLoadState) -> DataLoadState:
+    async def set_agent_system_message(self, state: DataLoadState) -> dict[str, Any]:
         """
         Add the system prompt to the conversation state.
 
@@ -59,15 +59,16 @@ class SystemInitializer:
 
         Returns
         -------
-        DataLoadState
+        dict[str, Any]
             Updated state with the system message added to messages list
             and current_node set to "initialize_system".
         """
         agent_initialization_system_message = SystemMessage(content=self._system_prompt)
-        messages = state.get("messages", [])
+        messages = state.messages
         messages.append(agent_initialization_system_message)
+        logger.info("Added system message to workflow state.")
+
         return {
-            **state,
-            "messages": messages,
-            "current_node": "initialize_system",
-        }
+        "messages": [SystemMessage(content="...")],
+        "current_node": "initialize_system",
+    }

@@ -13,9 +13,9 @@ from langchain_core.tracers import ConsoleCallbackHandler, LangChainTracer
 from langchain_core.runnables import RunnableConfig
 
 # Local imports
-from job_writing_agent.classes import DataLoadState, NodeName
+from job_writing_agent.classes import DataLoadState, NodeName, WorkflowInput
 from job_writing_agent.graph import build_job_app_graph
-from job_writing_agent.utils.application_cli_interface import handle_cli
+from job_writing_agent.utils.application_cli import handle_cli
 from job_writing_agent.utils.logging.logging_decorators import (
     log_errors,
     log_execution,
@@ -78,14 +78,17 @@ class JobWorkflow:
             content type, and empty messages list.
         """
 
-        return {
-            "resume_path": self.resume,
-            "job_description_source": self.job_description_source,
-            "content_category": self.content,
-            "current_node": "",
-            "messages": [],
-            "company_research_data": {},
-        }
+        workflow_input = WorkflowInput(
+            resume_file_path_=self.resume,
+            job_description_url_=self.job_description_source,
+            content_category_=self.content,
+        )
+
+        initial_state: DataLoadState = DataLoadState(
+            workflow_inputs=workflow_input, current_node=""
+        )
+        print(f"Initial Workflow State: {initial_state}")
+        return initial_state
 
     def _get_callbacks(self) -> list[Any]:
         """
@@ -128,23 +131,23 @@ class JobWorkflow:
             )
 
         return callbacks
-    
+
     def _build_runnable_config(self) -> RunnableConfig:
         """
         Build RunnableConfig with LangSmith tracing metadata.
-        
+
         Creates a config with workflow-specific tags, metadata, and callbacks
         for comprehensive observability across all LLM calls.
-        
+
         Returns
         -------
         RunnableConfig
             Configured for LangSmith tracing with content-specific metadata.
         """
         current_time = datetime.now()
-        thread_id = f"job_workflow_session_{current_time:%Y%m%d%H%M%S}" 
+        thread_id = f"job_workflow_session_{current_time:%Y%m%d%H%M%S}"
         timestamp = current_time.strftime("%Y%m%d-%H%M%S")
-        
+
         return {
             "configurable": {"thread_id": thread_id},
             "callbacks": self._get_callbacks(),
@@ -155,7 +158,6 @@ class JobWorkflow:
                 "session_id": thread_id,
             },
             "tags": ["job-application-workflow", self.content],
-            "recursion_limit": 2,
         }
 
     @log_execution
@@ -192,12 +194,14 @@ class JobWorkflow:
         config: RunnableConfig = self._build_runnable_config()
 
         try:
-            initial_workflow_state["current_node"] = NodeName.LOAD
+            initial_workflow_state.current_node = NodeName.LOAD
             logger.info(
                 f"Starting workflow execution: {run_name} "
                 f"(content_type={self.content}, session_id={thread_id})"
             )
-            graph_output = await compiled_graph.ainvoke(initial_workflow_state, config=config)
+            graph_output = await compiled_graph.ainvoke(
+                initial_workflow_state, config=config
+            )
             logger.info("Workflow execution completed successfully")
             return graph_output
         except Exception as e:

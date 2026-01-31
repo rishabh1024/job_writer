@@ -14,16 +14,13 @@ import dspy
 from langchain_community.document_loaders import PyPDFLoader, AsyncChromiumLoader
 from langchain_community.document_transformers import Html2TextTransformer
 from langchain_core.documents import Document
-from langchain_text_splitters import (
-    RecursiveCharacterTextSplitter,
-    MarkdownHeaderTextSplitter,
-)
 from langfuse import observe
 from pydantic import BaseModel, Field
 from typing_extensions import Any
 
 # Local imports
 from .errors import JobDescriptionParsingError, LLMProcessingError, URLExtractionError
+from job_writing_agent.agents.output_schema import CandidateJobFitAnalysis
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -258,138 +255,108 @@ def _is_heading(line: str) -> bool:
     return line.isupper() and len(line.split()) <= 5 and not re.search(r"\d", line)
 
 
-def parse_resume(file_path: str | Path) -> list[Document]:
+def parse_resume(file_path: str | Path) -> str:
     """
-    Load a résumé from PDF or TXT file → list[Document] chunks
-    (≈400 chars, 50‑char overlap) with {source, section} metadata.
-    """
-    file_extension = Path(file_path).suffix.lower()
+    Load a résumé from PDF or TXT and return full text with structure preserved.
 
-    # Handle different file types
-    if file_extension == ".pdf":
-        text = (
-            PyPDFLoader(str(file_path), extraction_mode="layout").load()[0].page_content
-        )
-    elif file_extension == ".txt":
+    Uses PyPDFLoader with extraction_mode="layout" for PDFs so layout and
+    structure are preserved. All pages are concatenated. No chunking is applied.
+
+    Parameters
+    ----------
+    file_path : str | Path
+        Local path to a .pdf or .txt resume file.
+
+    Returns
+    -------
+    str
+        Full resume text (whitespace normalized via _collapse_ws).
+
+    Raises
+    ------
+    ValueError
+        Unsupported type, empty file, or read error.
+    """
+    path = Path(file_path)
+    suffix = path.suffix.lower()
+
+    if suffix == ".pdf":
+        loader = PyPDFLoader(str(path), extraction_mode="layout")
+        docs = loader.load()
+        text = "\n".join(d.page_content for d in docs) if docs else ""
+        if not text.strip():
+            raise ValueError("PDF produced no text")
+    elif suffix == ".txt":
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 text = f.read()
                 if not text.strip():
                     raise ValueError("File is empty")
-        except Exception as e:
-            logger.error(f"Error reading text file: {str(e)}")
-            raise ValueError(f"Could not read text file: {file_path}. Error: {str(e)}")
+        except OSError as e:
+            logger.error("Error reading text file: %s", e)
+            raise ValueError(f"Could not read text file: {path}. Error: {e}") from e
     else:
         raise ValueError(
-            f"Unsupported resume file type: {file_path}. Supported types: .pdf, .txt"
+            f"Unsupported resume file type: {path}. Supported types: .pdf, .txt"
         )
 
-    text = _collapse_ws(text)
-
-    # Tag headings with "###" so Markdown splitter can see them
-    tagged_lines = [f"### {ln}" if _is_heading(ln) else ln for ln in text.splitlines()]
-
-    md_text = "\n".join(tagged_lines)
-
-    if "###" in md_text:
-        splitter = MarkdownHeaderTextSplitter(headers_to_split_on=[("###", "section")])
-        chunks = splitter.split_text(md_text)  # already returns Documents
-    else:
-        splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=50)
-        chunks: list[Document] = [
-            Document(page_content=chunk, metadata={})
-            for chunk in splitter.split_text(md_text)
-        ]  # Attach metadata
-    for doc in chunks:
-        doc.metadata.setdefault("source", str(file_path))
-        # section already present if header‑splitter was used
-    return chunks
+    return _collapse_ws(text)
 
 
-async def get_job_description(file_path_or_url: str) -> Document:
-    """Parse a job description from a file or URL into chunks.
+async def parse_job_description(url: str) -> Document:
+    """Parse a job description from a URL. Validates URL then fetches and structures content.
+
+    Only URLs are supported. Validation is done here; parse_job_description_from_url
+    assumes the URL is already validated.
 
     Args:
-        file_path_or_url: Local file path or URL of job posting
+        url: URL of the job posting (http:// or https://).
 
     Returns:
-        Document containing the job description
+        Document containing the job description and metadata (company_name, etc.).
+
+    Raises:
+        ValueError: If the URL format is invalid.
     """
-    # Check if the input is a URL
-    if file_path_or_url.startswith(("http://", "https://")):
-        return await parse_job_description_from_url(file_path_or_url)
-
-    # Handle local files based on extension
-    file_extension = Path(file_path_or_url).suffix.lower()
-
-    # Handle txt files
-    if file_extension == ".txt":
-        try:
-            with open(file_path_or_url, "r", encoding="utf-8") as f:
-                content = f.read()
-                if not content.strip():
-                    raise ValueError(f"File is empty: {file_path_or_url}")
-                return Document(
-                    page_content=content, metadata={"source": file_path_or_url}
-                )
-        except Exception as e:
-            logger.error(f"Error reading text file: {str(e)}")
-            raise ValueError(
-                f"Could not read text file: {file_path_or_url}. Error: {str(e)}"
-            )
-
-    # For other file types
-    raise ValueError(
-        f"Unsupported file type: {file_path_or_url}. Supported types: .pdf, .docx, .txt, .md"
-    )
+    parsed = urlparse(url)
+    if not all([parsed.scheme, parsed.netloc]):
+        logger.error("Invalid URL format: %s", url)
+        raise ValueError("URL must be valid and start with http:// or https://")
+    return await parse_job_description_from_url(url)
 
 
 async def scrape_job_description_from_web(urls: list[str]) -> str:
-    """This function will first scrape the data from the job listing.
-    Then using the recursive splitter using the different seperators,
-    it preserves the paragraphs, lines and words"""
+    """Scrape job listing URL(s) and return full page content as markdown text.
+
+    Uses headless Chromium to load the page(s), then Html2TextTransformer to
+    convert HTML to readable markdown. Returns one string (no chunking).
+    """
     loader = AsyncChromiumLoader(urls, headless=True)
-    scraped_data_documents = await loader.aload()
+    scraped_docs = await loader.aload()
 
     html2text = Html2TextTransformer()
-    markdown_scraped_data_documents = html2text.transform_documents(
-        scraped_data_documents
-    )
+    markdown_docs = html2text.transform_documents(scraped_docs)
 
-    # Grab the first 1000 tokens of the site
-    splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
-        chunk_size=1000, chunk_overlap=0
-    )
-
-    extracted_content = splitter.split_documents(markdown_scraped_data_documents)
-
-    return ".".join(doc.page_content for doc in extracted_content)
+    return "\n".join(doc.page_content for doc in markdown_docs if doc.page_content)
 
 
 async def parse_job_description_from_url(url: str) -> Document:
     """Extracts and structures a job description from a URL using an LLM.
 
-    This function fetches content from a URL, uses a DSPy to extract key details,
-    and returns a structured LangChain Document. If the LLM processing fails, it falls
-    back to returning the raw extracted text.
+    Caller (parse_job_description) is responsible for URL validation. This function
+    fetches content, uses DSPy to extract key details, and returns a structured
+    LangChain Document. If the LLM processing fails, it falls back to raw extracted text.
 
     Args:
-        url: The URL of the job posting.
+        url: The URL of the job posting (assumed already validated).
 
     Returns:
         A Document containing the structured job description and company name in metadata.
 
     Raises:
-        ValueError: If the URL format is invalid.
         JobDescriptionParsingError: For any unexpected errors during the process.
     """
     logger.info("Starting job description extraction from URL: %s", url)
-
-    # 1. Validate URL
-    parsed_url = urlparse(url)
-    if not all([parsed_url.scheme, parsed_url.netloc]):
-        logger.error("Invalid URL format: %s", url)
-        raise ValueError("URL must be valid and start with http:// or https://")
 
     raw_content = None
     try:
@@ -469,3 +436,67 @@ async def parse_job_description_from_url(url: str) -> Document:
         raise JobDescriptionParsingError(
             f"An unexpected error occurred while parsing the job description: {e}"
         ) from e
+
+
+async def analyze_candidate_job_fit(
+    resume_text: str,
+    job_description: str,
+    company_name: str,
+) -> dict[str, Any]:
+    """
+    Analyze candidate-job fit using DSPy.
+
+    Takes the candidate's resume and job description and produces structured
+    analysis for downstream content generation (cover letter, bullets, etc.).
+
+    Parameters
+    ----------
+    resume_text : str
+        Full text of the candidate's resume.
+    job_description : str
+        Full text of the job posting.
+    company_name : str
+        Name of the company (can be empty).
+
+    Returns
+    -------
+    dict[str, Any]
+        Dictionary with analysis fields: matching_qualifications, transferable_skills,
+        experience_highlights, potential_gaps, unique_value_proposition, talking_points.
+
+    Raises
+    ------
+    ValueError
+        If CEREBRAS_API_KEY environment variable is not set.
+    """
+
+    cerebras_api_key = os.getenv("CEREBRAS_API_KEY")
+    if not cerebras_api_key:
+        raise ValueError("CEREBRAS_API_KEY environment variable not set")
+
+    logger.info("Starting candidate-job fit analysis...")
+
+    with dspy.context(
+        lm=dspy.LM(
+            "cerebras/qwen-3-32b",
+            api_key=cerebras_api_key,
+            temperature=0.2,
+        )
+    ):
+        analyzer = dspy.Predict(CandidateJobFitAnalysis)
+        result = analyzer(
+            resume_text=resume_text,
+            job_description=job_description,
+            company_name=company_name or "the company",
+        )
+
+    logger.info("Candidate-job fit analysis completed.")
+
+    return {
+        "matching_qualifications": result.matching_qualifications,
+        "transferable_skills": result.transferable_skills,
+        "experience_highlights": result.experience_highlights,
+        "potential_gaps": result.potential_gaps,
+        "unique_value_proposition": result.unique_value_proposition,
+        "talking_points": result.talking_points,
+    }

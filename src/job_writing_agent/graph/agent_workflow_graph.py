@@ -11,6 +11,7 @@ Workflow Structure:
 
 import logging
 
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -48,7 +49,7 @@ def _route_after_load(state: DataLoadState) -> str:
     str
         Next node name: NodeName.LOAD or NodeName.RESEARCH.
     """
-    next_node = state.get("next_node", NodeName.RESEARCH)
+    next_node = getattr(state, "next_node", NodeName.RESEARCH)
     logger.info(f"Routing after load: {next_node}")
     return next_node
 
@@ -98,7 +99,12 @@ def build_job_app_graph() -> CompiledStateGraph:
     graph.add_edge(NodeName.CRITIQUE, NodeName.HUMAN_APPROVAL)
     graph.add_edge(NodeName.HUMAN_APPROVAL, NodeName.FINALIZE)
 
-    return graph.compile()
+    # Checkpointer required for interrupts and human-in-the-loop (state persisted per thread_id).
+    # MemorySaver for in-process/dev; LangGraph Remote API server can use SqliteSaver/Postgres via langgraph.json.
+    checkpointer = MemorySaver()
+    return graph.compile(
+        checkpointer=checkpointer, name="Job Application Workflow Graph"
+    )
 
 
 # Export at module level for LangGraph API deployment

@@ -9,9 +9,10 @@ job description files and URLs, extracting both the job posting text and company
 import logging
 from typing import Callable, Any, Optional, Tuple, Awaitable
 
+from deprecated import deprecated
 from langchain_core.documents import Document
 
-from job_writing_agent.utils.document_processing import get_job_description
+from job_writing_agent.utils.document_processing import parse_job_description
 from job_writing_agent.utils.logging.logging_decorators import (
     log_async,
     log_errors,
@@ -32,7 +33,7 @@ class JobDescriptionLoader:
 
     Example:
         >>> loader = JobDescriptionLoader()
-        >>> job_text, company = await loader.parse_job_description("https://example.com/job")
+        >>> job_text, company = await loader.load_job_description("https://example.com/job")
         >>>
         >>> # With custom parser for testing
         >>> async def mock_parser(source):
@@ -47,56 +48,45 @@ class JobDescriptionLoader:
         Parameters
         ----------
         parser: Optional[Callable[[Any], Awaitable[Document]]]
-            Async function to parse job description documents. Defaults to
-            `get_job_description` from document_processing. Can be injected
-            for testing or custom parsing.
+            Async function to parse job description from URL. Defaults to
+            `parse_job_description` from document_processing. Can be injected
+            for testing.
 
-            The parser should:
-            - Take one argument (source: str) - URL or file path
-            - Return an awaitable that resolves to a Document object
-            - Document should have page_content (str) and metadata (dict)
+            The parser should take a URL (str) and return an awaitable that
+            resolves to a Document with page_content (str) and metadata (dict).
         """
-        self._parser = parser or get_job_description
+        self._parser = parser or parse_job_description
 
     @log_async
     @log_errors
-    async def parse_job_description(
-        self, job_description_source: Any
-    ) -> Tuple[str, str]:
+    async def load_job_description(self, job_description_url: Any) -> Tuple[str, str]:
         """
-        Parse a job description and return its text and company name.
+        Load a job description from a URL and return its text and company name.
 
-        Extracts both the job posting text and company name from the document.
-        Company name is extracted from document metadata if available.
+        Callers (e.g. load_job_description_node) typically validate that the URL
+        is non-empty before calling. Company name is read from document metadata.
 
         Parameters
         ----------
-        job_description_source: Any
-            Source accepted by the parser function (URL, file path, etc.).
-            Can be a URL starting with http:// or https://, or a local file path.
+        job_description_url: Any
+            URL of the job posting (http:// or https://).
 
         Returns
         -------
         Tuple[str, str]
-            A tuple of (job_posting_text, company_name).
-            If company name is not found in metadata, returns empty string.
+            (job_posting_text, company_name). Empty strings if not found.
 
         Raises
         ------
-        AssertionError
-            If job_description_source is None.
         Exception
-            If parsing fails.
+            If parsing or fetching fails.
         """
         company_name = ""
         job_posting_text = ""
 
-        logger.info("Parsing job description from: %s", job_description_source)
-        assert job_description_source is not None, (
-            "Job description source cannot be None"
-        )
+        logger.info("Loading job description from: %s", job_description_url)
 
-        job_description_document: Document = await self._parser(job_description_source)
+        job_description_document: Document = await self._parser(job_description_url)
 
         # Extract company name from metadata
         if hasattr(job_description_document, "metadata") and isinstance(
@@ -123,34 +113,6 @@ class JobDescriptionLoader:
         return job_posting_text, company_name
 
     @log_async
-    @log_errors
-    async def _load_job_description(self, jd_source: Any) -> Tuple[str, str]:
-        """
-        Load job description text and company name, raising if missing.
-
-        This is a wrapper around parse_job_description() that validates the
-        source first. Used by subgraph nodes for consistent error handling.
-
-        Parameters
-        ----------
-        jd_source: Any
-            Source for the job description (URL, file path, etc.).
-
-        Returns
-        -------
-        Tuple[str, str]
-            A tuple of (job_posting_text, company_name).
-
-        Raises
-        ------
-        ValueError
-            If jd_source is None or empty.
-        """
-        if not jd_source:
-            raise ValueError("job_description_source is required")
-        return await self.parse_job_description(jd_source)
-
-    @log_async
     async def get_application_form_details(self, job_description_source: Any):
         """
         Placeholder for future method to get application form details.
@@ -166,27 +128,21 @@ class JobDescriptionLoader:
         # TODO: Implement form field extraction
         pass
 
+    @deprecated(
+        version="1.0.0",
+        reason="Job description prompting now uses LangGraph interrupts (prompt_user_for_job_description_node). "
+        "This method used synchronous input() which blocked async execution and was not suitable for web deployment.",
+    )
     async def _prompt_user_for_job_description(self) -> str:
         """
-        Prompt the user for input (synchronous input wrapped for async use).
+        Prompt the user for job description text via stdin.
 
-        This method wraps the synchronous input() function to be used in async
-        contexts. In a production async UI, this would be replaced with an
-        async input mechanism.
-
-        Note: This is a shared utility method. In a future refactoring, this
-        could be extracted to a separate UserInputHelper class following the
-        Interface Segregation Principle.
-
-        Parameters
-        ----------
-        prompt_msg: str
-            Message to display to the user.
+        Kept for backward compatibility only. Use prompt_user_for_job_description_node
+        with LangGraph interrupt in new code.
 
         Returns
         -------
         str
             User input string.
         """
-        # In a real async UI replace input with an async call.
         return input("Please paste the job description in text format: ")
