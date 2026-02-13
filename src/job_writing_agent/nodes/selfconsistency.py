@@ -31,7 +31,7 @@ def self_consistency_vote(state: AppState) -> AppState:
     # Create LLM inside function (lazy initialization)
     llm_factory = LLMFactory()
     precise_llm = llm_factory.create_langchain(
-        model="google/gemma-3-12b-it:free", provider="openrouter", temperature=0.1
+        model="google/gemma-3-27b-it:free", provider="openrouter", temperature=0.1
     )
 
     variations_data = state.get("variations", {"variations": []})
