@@ -37,7 +37,7 @@ class TavilyResearchTool:
         job_description,
         company_name,
         max_results=5,
-        model_name="mistralai/devstral-2512:free",
+        model_name="google/gemma-3-2google/gemma-3-27b-it:free7b-it:free",
     ):
         # Create LLM inside __init__ (lazy initialization)
         llm_provider = LLMFactory()

@@ -155,7 +155,7 @@ class JobWorkflow:
                 "session_id": thread_id,
             },
             "tags": ["job-application-workflow", self.content],
-            "recursion_limit": 2,
+            "recursion_limit": 10,
         }
 
     @log_execution
