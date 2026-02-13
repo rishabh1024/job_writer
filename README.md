@@ -9,90 +9,129 @@ pinned: false
 python_version: 3.12.8
 ---
 
-# Job Writer Module
+# Job Application Writer Agent
 
-A modular, well-structured package for creating tailored job applications using LangChain and LangGraph with LangSmith observability.
+An AI-powered agent workflow that generates tailored job application materials — cover letters, bullet-point summaries, and LinkedIn connection notes — using LangGraph, LangChain, and DSPy. The system performs automated company research, drafts content with self-consistency voting, applies AI critique, and supports human-in-the-loop feedback before finalizing output.
+
+**Live Demo:** [EasyApply](https://rishabh2095-easyapply.hf.space/) | [Hugging Face Space](https://huggingface.co/spaces/Rishabh2095/AgentWorkflowJobApplications)
 
 ## Features
 
-- Creates personalized job application materials based on resumes and job descriptions
-- Supports multiple application types: cover letters, bullet points, and LinkedIn messages
-- Uses RAG for personalization and web search for company research
-- Provides human-in-the-loop feedback integration
-- Implements self-consistency voting for quality control
+- **Multi-format input** — Accepts resumes in PDF, TXT, MD, and JSON; job descriptions via URL or Google Docs link
+- **Automated company research** — Uses Tavily search with LLM-based relevance filtering to gather context about the target company
+- **Multiple output types** — Cover letters, bullet-point highlights, and LinkedIn connection messages
+- **Quality control pipeline** — Generates multiple draft variations, selects the best via self-consistency voting, and applies AI critique
+- **Human-in-the-loop** — LangGraph interrupt-based approval step so you can provide feedback before finalization
+- **Multi-provider LLM support** — Factory pattern supporting OpenRouter, Cerebras, and Ollama (both LangChain and DSPy)
+- **Observability** — Full LangSmith tracing with metadata and tags
+- **Parallel processing** — Resume and job description parsing run concurrently
 
-## Installation
+## Architecture
+
+The workflow is a LangGraph state machine composed of subgraphs:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Main Workflow Graph                          │
+│                                                                     │
+│  ┌──────────┐    ┌─────────┐    ┌─────────────┐    ┌───────────┐  │
+│  │   LOAD   │───▶│RESEARCH │───▶│ CREATE_DRAFT│───▶│  CRITIQUE │  │
+│  │(subgraph)│    │(subgraph│    │             │    │           │  │
+│  └──────────┘    └─────────┘    └─────────────┘    └─────┬─────┘  │
+│         ▲                                                │        │
+│         └── retry on                           ┌─────────▼──────┐ │
+│             validation                         │HUMAN_APPROVAL  │ │
+│             failure                            │  (interrupt)   │ │
+│                                                └─────────┬──────┘ │
+│                                                          │        │
+│                                                ┌─────────▼──────┐ │
+│                                                │    FINALIZE    │ │
+│                                                └────────────────┘ │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+## Getting Started
+
+### Prerequisites
+
+- Python 3.11+
+- [uv](https://docs.astral.sh/uv/) (recommended) or pip
+- API keys for your chosen LLM provider (OpenRouter, Cerebras, or Ollama) and Tavily
+
+### Installation
 
 ```bash
-# Install the package and its dependencies
+# Clone the repository
+git clone https://github.com/rishabh1024/job_writer.git
+cd job_writer
+
+# Install with uv (recommended)
+uv pip install -e .
+
+# Or with pip
 pip install -e .
-
-# Install development dependencies (including linting tools)
-pip install -r requirements-dev.txt
 ```
 
-## Code Standards and Linting
+### Usage
 
-This project uses several tools to ensure code quality:
-
-1. **Black** - Code formatter that enforces consistent style
-2. **isort** - Sorts imports according to best practices
-3. **Flake8** - Style guide enforcement
-4. **mypy** - Static type checking
-
-### Running the Linters
+#### CLI
 
 ```bash
-# Format code with Black
-black job_writer/
+# With uv
+uv run -m job_writing_agent.workflow \
+  --resume path/to/resume.pdf \
+  --job https://example.com/job-posting \
+  --type cover_letter
 
-# Sort imports
-isort job_writer/
-
-# Check style with Flake8
-flake8 job_writer/
-
-# Type checking with mypy
-mypy job_writer/
+# With python directly
+python -m job_writing_agent.workflow \
+  --resume path/to/resume.pdf \
+  --job https://example.com/job-posting \
+  --type cover_letter
 ```
 
-### Pre-commit Hooks
+Content types: `cover_letter`, `bullet_points`, `linkedin_note`
 
-We use pre-commit hooks to automatically run linters before each commit:
+#### LangGraph API
+
+When deployed, the workflow is exposed as a LangGraph API with three graphs:
+
+| Graph | Endpoint | Description |
+|---|---|---|
+| `job_app_graph` | Full pipeline | End-to-end: load → research → draft → critique → approve → finalize |
+| `research_workflow` | Research only | Company research with Tavily search and relevance filtering |
+| `data_loading_workflow` | Data loading only | Resume and job description parsing |
+
+## Deployment
+
+### Hugging Face Spaces (Docker)
+
+The project is configured for deployment on Hugging Face Spaces using the Docker SDK.
 
 ```bash
-# Install the pre-commit hooks
-pip install pre-commit
-pre-commit install
-
-# You can also run the hooks manually
-pre-commit run --all-files
+# Push to your HF Space
+git push hf main
 ```
 
-## Usage Example
+The `Dockerfile` uses `langchain/langgraph-api:3.12` as the base image and:
+- Installs the package and dependencies via `uv`
+- Sets up Playwright with Chromium for web scraping
+- Runs on port 7860 with a non-root user for HF compatibility
+- Includes a healthcheck at `/ok`
 
-```python
-import asyncio
-from job_writer.workflow import run_job_application_writer
+## Tech Stack
 
-# Run the job application writer
-result = asyncio.run(run_job_application_writer(
-    resume_path="path/to/resume.pdf",
-    job_desc_path="https://example.com/job-posting",
-    content="cover_letter"
-))
+| Category | Tools |
+|---|---|
+| Orchestration | [LangGraph](https://github.com/langchain-ai/langgraph) |
+| LLM Framework | [LangChain](https://github.com/langchain-ai/langchain), [DSPy](https://github.com/stanfordnlp/dspy) |
+| Search | [Tavily](https://tavily.com/) |
+| Evaluation | [OpenEvals](https://github.com/langchain-ai/openevals) (LLM-as-judge) |
+| Observability | [LangSmith](https://smith.langchain.com/) |
+| Web Scraping | [Playwright](https://playwright.dev/) |
+| Deployment | Docker, Hugging Face Spaces |
+| Package Management | [uv](https://docs.astral.sh/uv/) |
 
-print(result["final"])
-```
+## License
 
-Alternatively, you can use the command-line interface:
-
-```bash
-python -m job_writer.workflow --resume path/to/resume.pdf --job https://example.com/job-posting --type cover_letter
-```
-
-Run with uv
-
-```bash
-uv run --active -m job_writing_agent.workflow --resume resumefilepath --job jobposturl
-```
+This project is provided as-is for educational and personal use.
