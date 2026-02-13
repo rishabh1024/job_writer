@@ -41,7 +41,7 @@ def create_draft(state: ResearchState) -> ResultState:
     # Create LLM inside function (lazy initialization)
     llm_provider = LLMFactory()
     llm = llm_provider.create_langchain(
-        "mistralai/devstral-2512:free",
+        "google/gemma-3-27b-it:free",
         provider="openrouter",
         temperature=0.3,
     )
@@ -139,7 +139,7 @@ def critique_draft(state: ResultState) -> ResultState:
         # Create LLM inside function (lazy initialization)
         llm_provider = LLMFactory()
         llm = llm_provider.create_langchain(
-            "mistralai/devstral-2512:free",
+            "google/gemma-3-27b-it:free",
             provider="openrouter",
             temperature=0.3,
         )
@@ -269,7 +269,7 @@ def finalize_document(state: ResultState) -> ResultState:
     # Create LLM inside function (lazy initialization)
     llm_provider = LLMFactory()
     llm = llm_provider.create_langchain(
-        "mistralai/devstral-2512:free",
+        "google/gemma-3-27b-it:free",
         provider="openrouter",
         temperature=0.3,
     )
