@@ -102,23 +102,6 @@ When deployed, the workflow is exposed as a LangGraph API with three graphs:
 | `research_workflow` | Research only | Company research with Tavily search and relevance filtering |
 | `data_loading_workflow` | Data loading only | Resume and job description parsing |
 
-## Deployment
-
-### Hugging Face Spaces (Docker)
-
-The project is configured for deployment on Hugging Face Spaces using the Docker SDK.
-
-```bash
-# Push to your HF Space
-git push hf main
-```
-
-The `Dockerfile` uses `langchain/langgraph-api:3.12` as the base image and:
-- Installs the package and dependencies via `uv`
-- Sets up Playwright with Chromium for web scraping
-- Runs on port 7860 with a non-root user for HF compatibility
-- Includes a healthcheck at `/ok`
-
 ## Tech Stack
 
 | Category | Tools |
