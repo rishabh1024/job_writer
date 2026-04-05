@@ -34,7 +34,7 @@ def generate_variations(state: ResultState) -> dict[str, list[str]]:
     # Create LLM inside function (lazy initialization)
     llm_provider = LLMFactory()
     llm = llm_provider.create_langchain(
-        "google/gemma-3-27b-it:free", provider="openrouter", temperature=0.3
+        "openai/gpt-oss-20b:free", provider="openrouter", temperature=0.3
     )
 
     variations = []
