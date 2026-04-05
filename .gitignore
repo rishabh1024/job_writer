@@ -34,6 +34,7 @@ job_writing_agent/**/*.pyc
 __pycache__/
 *.py[cod]
 *.pyc
+*.log
 
 .vscode/*
 .cursor/*
@@ -43,11 +44,10 @@ app_env/*
 .docker_env
 requirements.txt
 .langgraph_api/*
-.src/job_writing_agent/logs/*
+src/job_writing_agent/logs/*
 docker-compose.override.example.yml
 DOCKERFILE_EXPLANATION.md
 DEPLOYMENT_GUIDE.md
-./src/job_writing_agent/logs/*.log
 
 # Binary files (PDFs, images, etc.)
 *.pdf
