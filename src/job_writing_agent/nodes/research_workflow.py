@@ -150,7 +150,7 @@ def company_research_data_summary(state: ResearchState) -> ResearchState:
 
         llm_provider = LLMFactory()
         llm = llm_provider.create_dspy(
-            model="google/gemma-3-27b-it:free",
+            model="openai/gpt-oss-20b:free",
             provider="openrouter",
             temperature=0.3,
         )

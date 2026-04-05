@@ -153,7 +153,7 @@ def company_research_data_summary(state: ResearchState) -> dict[str, Any]:
 
         llm_provider = LLMFactory()
         llm = llm_provider.create_dspy(
-            model="liquid/lfm-2.5-1.2b-instruct:free",
+            model="openai/gpt-oss-20b:free",
             provider="openrouter",
             temperature=0.3,
         )
