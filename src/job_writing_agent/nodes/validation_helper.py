@@ -10,7 +10,7 @@ Responsibility Principle by focusing solely on input validation.
 import logging
 
 from job_writing_agent.classes import DataLoadState
-from job_writing_agent.utils.logging.logging_decorators import (
+from job_writing_agent.utils.app_log.logging_decorators import (
     log_execution,
     log_errors,
 )

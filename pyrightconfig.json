@@ -1,18 +1,19 @@
 {
     "include": [
-        "src"
+        "src",
+        "tests"
     ],
     "exclude": [
         "**/__pycache__",
         "**/.*",
         "app_env",
-        "node_modules"
+        "**/.json"
     ],
     "extraPaths": [
         "src"
     ],
     "pythonVersion": "3.12",
     "typeCheckingMode": "basic",
-    "reportMissingImports": true,
+    "reportMissingImports": "error",
     "reportMissingTypeStubs": false
 }

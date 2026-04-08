@@ -12,7 +12,7 @@ from typing import Callable, Any, Optional, Tuple, Awaitable
 from langchain_core.documents import Document
 
 from job_writing_agent.utils.document_processing import get_job_description
-from job_writing_agent.utils.logging.logging_decorators import (
+from job_writing_agent.utils.app_log.logging_decorators import (
     log_async,
     log_errors,
 )

@@ -14,7 +14,7 @@ from langchain_core.messages import SystemMessage
 
 from job_writing_agent.classes import DataLoadState
 from job_writing_agent.prompts.templates import agent_system_prompt
-from job_writing_agent.utils.logging.logging_decorators import log_async
+from job_writing_agent.utils.app_log.logging_decorators import log_async
 
 logger = logging.getLogger(__name__)
 

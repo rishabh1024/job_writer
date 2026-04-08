@@ -2,11 +2,7 @@
 # Patterns here are relative to the `src/` directory
 
 # Environment / secret files
-job_writing_agent/.env
-job_writing_agent/.env.*
-src/job_writing_agent/.env
-src/job_writing_agent/.env.*
-
+.env
 # Jupyter notebooks
 job_writing_agent/*.ipynb
 
@@ -33,7 +29,6 @@ job_writing_agent/**/*.pyc
 *.pickle
 __pycache__/
 *.py[cod]
-*.pyc
 *.log
 
 .vscode/*
@@ -46,8 +41,6 @@ requirements.txt
 .langgraph_api/*
 src/job_writing_agent/logs/*
 docker-compose.override.example.yml
-DOCKERFILE_EXPLANATION.md
-DEPLOYMENT_GUIDE.md
 
 # Binary files (PDFs, images, etc.)
 *.pdf

@@ -53,53 +53,46 @@ def _route_after_load(state: DataLoadState) -> str:
     return next_node
 
 
-def build_job_app_graph() -> CompiledStateGraph:
-    """
-    Build and compile the job application workflow graph.
+"""
+Build and compile the job application workflow graph.
 
-    This function creates the graph structure independent of runtime inputs.
-    Actual runtime values (resume, job description) come from the state
-    passed during invocation.
+This function creates the graph structure independent of runtime inputs.
+Actual runtime values (resume, job description) come from the state
+passed during invocation.
 
-    Returns
-    -------
-    CompiledStateGraph
-        Compiled LangGraph state machine ready for execution.
-    """
-    graph = StateGraph(DataLoadState)
+"""
 
-    # Add nodes
-    graph.add_node(NodeName.LOAD, data_loading_workflow)
-    graph.add_node(NodeName.RESEARCH_SUBGRAPH_ADAPTER, dataload_to_research_adapter)
-    graph.add_node(NodeName.RESEARCH, research_workflow)
-    graph.add_node(NodeName.CREATE_DRAFT, create_draft)
-    graph.add_node(NodeName.CRITIQUE, critique_draft)
-    graph.add_node(NodeName.HUMAN_APPROVAL, human_approval)
-    graph.add_node(NodeName.FINALIZE, finalize_document)
+graph = StateGraph(DataLoadState)
 
-    # Set entry and exit
-    graph.set_entry_point(NodeName.LOAD)
-    graph.set_finish_point(NodeName.FINALIZE)
+# Add nodes
+graph.add_node(NodeName.LOAD, data_loading_workflow)
+graph.add_node(NodeName.RESEARCH_SUBGRAPH_ADAPTER, dataload_to_research_adapter)
+graph.add_node(NodeName.RESEARCH, research_workflow)
+graph.add_node(NodeName.CREATE_DRAFT, create_draft)
+graph.add_node(NodeName.CRITIQUE, critique_draft)
+graph.add_node(NodeName.HUMAN_APPROVAL, human_approval)
+graph.add_node(NodeName.FINALIZE, finalize_document)
 
-    # Add conditional edge for routing after data loading
-    graph.add_conditional_edges(
-        NodeName.LOAD,
-        _route_after_load,
-        {
-            NodeName.LOAD: NodeName.LOAD,
-            NodeName.RESEARCH: NodeName.RESEARCH_SUBGRAPH_ADAPTER,
-        },
-    )
+# Set entry and exit
+graph.set_entry_point(NodeName.LOAD)
+graph.set_finish_point(NodeName.FINALIZE)
 
-    # Add sequential edges for main workflow
-    graph.add_edge(NodeName.RESEARCH_SUBGRAPH_ADAPTER, NodeName.RESEARCH)
-    graph.add_edge(NodeName.RESEARCH, NodeName.CREATE_DRAFT)
-    graph.add_edge(NodeName.CREATE_DRAFT, NodeName.CRITIQUE)
-    graph.add_edge(NodeName.CRITIQUE, NodeName.HUMAN_APPROVAL)
-    graph.add_edge(NodeName.HUMAN_APPROVAL, NodeName.FINALIZE)
+# Add conditional edge for routing after data loading
+graph.add_conditional_edges(
+    NodeName.LOAD,
+    _route_after_load,
+    {
+        NodeName.LOAD: NodeName.LOAD,
+        NodeName.RESEARCH: NodeName.RESEARCH_SUBGRAPH_ADAPTER,
+    },
+)
 
-    return graph.compile()
-
+# Add sequential edges for main workflow
+graph.add_edge(NodeName.RESEARCH_SUBGRAPH_ADAPTER, NodeName.RESEARCH)
+graph.add_edge(NodeName.RESEARCH, NodeName.CREATE_DRAFT)
+graph.add_edge(NodeName.CREATE_DRAFT, NodeName.CRITIQUE)
+graph.add_edge(NodeName.CRITIQUE, NodeName.HUMAN_APPROVAL)
+graph.add_edge(NodeName.HUMAN_APPROVAL, NodeName.FINALIZE)
 
 # Export at module level for LangGraph API deployment
-job_app_graph = build_job_app_graph()
+job_app_graph = graph.compile(name="Job Application Workflow")

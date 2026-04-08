@@ -40,7 +40,7 @@ from job_writing_agent.nodes.resume_loader import ResumeLoader
 from job_writing_agent.nodes.job_description_loader import JobDescriptionLoader
 from job_writing_agent.nodes.system_initializer import SystemInitializer
 from job_writing_agent.utils.document_processing import analyze_candidate_job_fit
-from job_writing_agent.utils.logging.logging_decorators import log_async
+from job_writing_agent.utils.app_log.logging_decorators import log_async
 
 logger = logging.getLogger(__name__)
 
@@ -299,23 +299,39 @@ N = DataLoadingNodes  # Shorthand for graph construction
 data_loading_subgraph = StateGraph(DataLoadState)
 
 data_loading_subgraph.add_node(
-    N.SET_AGENT_SYSTEM_MESSAGE.value, set_agent_system_message_node
-)
-data_loading_subgraph.add_node(N.LOAD_RESUME.value, load_resume_node)
-data_loading_subgraph.add_node(N.LOAD_JOB_DESCRIPTION.value, load_job_description_node)
-data_loading_subgraph.add_node(
-    N.PROMPT_USER_FOR_RESUME.value, prompt_user_for_resume_node
-)
-data_loading_subgraph.add_node(
-    N.PROMPT_USER_FOR_JOB_DESCRIPTION.value, prompt_user_for_job_description_node
-)
-data_loading_subgraph.add_node(
-    N.CANDIDATE_JOB_FIT_ANALYSIS.value, candidate_job_fit_analysis_node
-)
+    N.SET_AGENT_SYSTEM_MESSAGE.value, 
+    set_agent_system_message_node)
 
-data_loading_subgraph.set_entry_point(N.SET_AGENT_SYSTEM_MESSAGE.value)
-data_loading_subgraph.set_finish_point(N.CANDIDATE_JOB_FIT_ANALYSIS.value)
-data_loading_subgraph.add_edge(N.SET_AGENT_SYSTEM_MESSAGE.value, N.LOAD_RESUME.value)
+data_loading_subgraph.add_node(
+    N.LOAD_RESUME.value,
+    load_resume_node)
+
+data_loading_subgraph.add_node(
+    N.LOAD_JOB_DESCRIPTION.value,
+    load_job_description_node)
+
+data_loading_subgraph.add_node(
+    N.PROMPT_USER_FOR_RESUME.value,
+    prompt_user_for_resume_node)
+
+data_loading_subgraph.add_node(
+    N.PROMPT_USER_FOR_JOB_DESCRIPTION.value,
+    prompt_user_for_job_description_node)
+
+data_loading_subgraph.add_node(
+    N.CANDIDATE_JOB_FIT_ANALYSIS.value,
+    candidate_job_fit_analysis_node)
+
+data_loading_subgraph.set_entry_point(
+    N.SET_AGENT_SYSTEM_MESSAGE.value)
+
+data_loading_subgraph.set_finish_point(
+    N.CANDIDATE_JOB_FIT_ANALYSIS.value)
+
+data_loading_subgraph.add_edge(
+    N.SET_AGENT_SYSTEM_MESSAGE.value,
+    N.LOAD_RESUME.value)
+
 data_loading_subgraph.add_conditional_edges(
     N.LOAD_RESUME.value,
     route_after_resume_load,
@@ -324,9 +340,11 @@ data_loading_subgraph.add_conditional_edges(
         N.LOAD_JOB_DESCRIPTION.value: N.LOAD_JOB_DESCRIPTION.value,
     },
 )
+
 data_loading_subgraph.add_edge(
     N.PROMPT_USER_FOR_RESUME.value, N.LOAD_JOB_DESCRIPTION.value
 )
+
 data_loading_subgraph.add_conditional_edges(
     N.LOAD_JOB_DESCRIPTION.value,
     route_after_job_load,

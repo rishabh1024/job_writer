@@ -18,7 +18,7 @@ from job_writing_agent.nodes.resume_loader import ResumeLoader
 from job_writing_agent.nodes.job_description_loader import JobDescriptionLoader
 from job_writing_agent.nodes.system_initializer import SystemInitializer
 from job_writing_agent.nodes.validation_helper import ValidationHelper
-from job_writing_agent.utils.logging.logging_decorators import (
+from job_writing_agent.utils.app_log.logging_decorators import (
     log_async,
     log_execution,
 )
@@ -235,25 +235,54 @@ data_loading_subgraph = StateGraph(DataLoadState)
 
 # Add subgraph nodes
 data_loading_subgraph.add_node(
-    "set_agent_system_message", set_agent_system_message_node
-)
-data_loading_subgraph.add_node("parse_resume", parse_resume_node)
-data_loading_subgraph.add_node("parse_job_description", parse_job_description_node)
-data_loading_subgraph.add_node("aggregate_results", aggregate_data_loading_results)
-data_loading_subgraph.add_node("verify_inputs", verify_inputs_node)
+    "set_agent_system_message", 
+    set_agent_system_message_node)
+
+data_loading_subgraph.add_node(
+    "parse_resume", 
+    parse_resume_node)
+
+data_loading_subgraph.add_node(
+    "parse_job_description",
+    parse_job_description_node)
+
+data_loading_subgraph.add_node(
+    "aggregate_results",
+    aggregate_data_loading_results)
+
+data_loading_subgraph.add_node(
+    "verify_inputs",
+    verify_inputs_node)
 
 # Add subgraph edges
-data_loading_subgraph.add_edge(START, "set_agent_system_message")
-# Parallel execution: both nodes start after set_agent_system_message
-data_loading_subgraph.add_edge("set_agent_system_message", "parse_resume")
-data_loading_subgraph.add_edge("set_agent_system_message", "parse_job_description")
-# Both parallel nodes feed into aggregate (LangGraph waits for both)
-data_loading_subgraph.add_edge("parse_resume", "aggregate_results")
-data_loading_subgraph.add_edge("parse_job_description", "aggregate_results")
-# Aggregate feeds into verification
-data_loading_subgraph.add_edge("aggregate_results", "verify_inputs")
-# Verification ends the subgraph
-data_loading_subgraph.add_edge("verify_inputs", END)
+data_loading_subgraph.add_edge(
+    START,
+    "set_agent_system_message")
 
-# Compile data loading subgraph
+# Parallel execution: both nodes start after set_agent_system_message
+data_loading_subgraph.add_edge(
+    "set_agent_system_message",
+    "parse_resume")
+
+data_loading_subgraph.add_edge(
+    "set_agent_system_message",
+    "parse_job_description")
+
+# Both parallel nodes feed into aggregate (LangGraph waits for both)
+data_loading_subgraph.add_edge(
+    "parse_resume",
+    "aggregate_results")
+
+data_loading_subgraph.add_edge(
+    "parse_job_description",
+    "aggregate_results")
+
+data_loading_subgraph.add_edge(
+    "aggregate_results",
+    "verify_inputs")
+
+data_loading_subgraph.add_edge(
+    "verify_inputs",
+    END)
+
 data_loading_workflow = data_loading_subgraph.compile()

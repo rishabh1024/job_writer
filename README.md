@@ -78,13 +78,13 @@ pip install -e .
 
 ```bash
 # With uv
-uv run -m job_writing_agent.workflow \
+uv run -m job_writing_agent \
   --resume path/to/resume.pdf \
   --job https://example.com/job-posting \
   --type cover_letter
 
 # With python directly
-python -m job_writing_agent.workflow \
+python -m job_writing_agent \
   --resume path/to/resume.pdf \
   --job https://example.com/job-posting \
   --type cover_letter
