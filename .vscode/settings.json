@@ -1,10 +1,27 @@
 {
+    "workbench.colorTheme": "Cursor Light",
+    "window.zoomLevel": 1,
     "python.defaultInterpreterPath": "C:\\Users\\risha\\python-dir\\job_application_agent\\job_writer\\app_env\\Scripts\\python.exe",
-    "python.formatting.provider": "black",
+    "editor.defaultFormatter": "charliermarsh.ruff",
     "editor.formatOnSave": true,
-    "python.formatting.blackArgs": ["--line-length", "88"],
-     "python.linting.enabled": true,
-    "python.linting.pylintEnabled": true,
-    "python.linting.lintOnSave": true,
-    "python.linting.mypyEnabled": true
+    "python.languageServer": "None",
+    "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    },
+        "editor.rulers": [90],
+        "editor.tabSize": 4
+    },
+    "ruff.enable": true,
+    "ruff.organizeImports": true,
+    "ruff.fixAll": true,
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/.pytest_cache": true,
+        "**/.mypy_cache": true,
+        "**/.ruff_cache": true
+    },
 }

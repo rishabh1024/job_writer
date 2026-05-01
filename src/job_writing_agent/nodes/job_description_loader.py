@@ -7,59 +7,32 @@ job description files and URLs, extracting both the job posting text and company
 """
 
 import logging
-from typing import Callable, Any, Optional, Tuple, Awaitable
+from typing import Any, Awaitable, Callable, ClassVar, Optional, Tuple
 
 from langchain_core.documents import Document
 
 from job_writing_agent.utils.document_processing import get_job_description
-from job_writing_agent.utils.app_log.logging_decorators import (
-    log_async,
-    log_errors,
-)
 
 logger = logging.getLogger(__name__)
 
 
 class JobDescriptionLoader:
     """
-    Responsible for loading and parsing job description documents.
-
-    This class follows SOLID principles:
-    - Single Responsibility: Only handles job description parsing
-    - Dependency Inversion: Parser is injected for testability
-    - Open/Closed: Can extend with different parsers without modification
-    - Interface Segregation: Focused interface (only job description methods)
-
-    Example:
-        >>> loader = JobDescriptionLoader()
-        >>> job_text, company = await loader.parse_job_description("https://example.com/job")
-        >>>
-        >>> # With custom parser for testing
-        >>> async def mock_parser(source):
-        ...     return Document(page_content="test", metadata={"company_name": "TestCo"})
-        >>> loader = JobDescriptionLoader(parser=mock_parser)
+    Responsible for loading and parsing job
+    description from website links or file uploads
     """
 
-    def __init__(self, parser: Optional[Callable[[Any], Awaitable[Document]]] = None):
+    company_name: ClassVar[str]
+    job_posting_text: ClassVar[str]
+
+    def __init__(
+        self, parser: Optional[Callable[[Any], Awaitable[Document]]] = None
+    ):
         """
         Initialize JobDescriptionLoader with optional parser dependency injection.
-
-        Parameters
-        ----------
-        parser: Optional[Callable[[Any], Awaitable[Document]]]
-            Async function to parse job description documents. Defaults to
-            `get_job_description` from document_processing. Can be injected
-            for testing or custom parsing.
-
-            The parser should:
-            - Take one argument (source: str) - URL or file path
-            - Return an awaitable that resolves to a Document object
-            - Document should have page_content (str) and metadata (dict)
         """
         self._parser = parser or get_job_description
 
-    @log_async
-    @log_errors
     async def parse_job_description(
         self, job_description_source: Any
     ) -> Tuple[str, str]:
@@ -68,43 +41,28 @@ class JobDescriptionLoader:
 
         Extracts both the job posting text and company name from the document.
         Company name is extracted from document metadata if available.
-
-        Parameters
-        ----------
-        job_description_source: Any
-            Source accepted by the parser function (URL, file path, etc.).
-            Can be a URL starting with http:// or https://, or a local file path.
-
-        Returns
-        -------
-        Tuple[str, str]
-            A tuple of (job_posting_text, company_name).
-            If company name is not found in metadata, returns empty string.
-
-        Raises
-        ------
-        AssertionError
-            If job_description_source is None.
-        Exception
-            If parsing fails.
         """
-        company_name = ""
-        job_posting_text = ""
 
         logger.info("Parsing job description from: %s", job_description_source)
         assert job_description_source is not None, (
             "Job description source cannot be None"
         )
 
-        job_description_document: Document = await self._parser(job_description_source)
+        job_description_document: Document = await self._parser(
+            job_description_source
+        )
 
         # Extract company name from metadata
         if hasattr(job_description_document, "metadata") and isinstance(
             job_description_document.metadata, dict
         ):
-            company_name = job_description_document.metadata.get("company_name", "")
+            company_name = job_description_document.metadata.get(
+                "company_name", ""
+            )
             if not company_name:
-                logger.warning("Company name not found in job description metadata.")
+                logger.warning(
+                    "Company name not found in job description metadata."
+                )
         else:
             logger.warning(
                 "Metadata attribute missing or not a dict in job description document."
@@ -122,8 +80,6 @@ class JobDescriptionLoader:
 
         return job_posting_text, company_name
 
-    @log_async
-    @log_errors
     async def _load_job_description(self, jd_source: Any) -> Tuple[str, str]:
         """
         Load job description text and company name, raising if missing.
@@ -150,7 +106,6 @@ class JobDescriptionLoader:
             raise ValueError("job_description_source is required")
         return await self.parse_job_description(jd_source)
 
-    @log_async
     async def get_application_form_details(self, job_description_source: Any):
         """
         Placeholder for future method to get application form details.
@@ -168,15 +123,7 @@ class JobDescriptionLoader:
 
     async def _prompt_user_for_job_description(self) -> str:
         """
-        Prompt the user for input (synchronous input wrapped for async use).
-
-        This method wraps the synchronous input() function to be used in async
-        contexts. In a production async UI, this would be replaced with an
-        async input mechanism.
-
-        Note: This is a shared utility method. In a future refactoring, this
-        could be extracted to a separate UserInputHelper class following the
-        Interface Segregation Principle.
+        Prompt the user for input
 
         Parameters
         ----------

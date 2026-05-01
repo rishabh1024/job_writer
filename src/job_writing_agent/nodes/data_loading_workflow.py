@@ -11,27 +11,18 @@ following the Single Responsibility Principle.
 import logging
 from typing import Any
 
-from langgraph.graph import StateGraph, END, START
+from langgraph.graph import END, START, StateGraph
 
 from job_writing_agent.classes import DataLoadState
-from job_writing_agent.nodes.resume_loader import ResumeLoader
+from job_writing_agent.classes.classes import DataLoadState
 from job_writing_agent.nodes.job_description_loader import JobDescriptionLoader
+from job_writing_agent.nodes.resume_loader import ResumeLoader
 from job_writing_agent.nodes.system_initializer import SystemInitializer
 from job_writing_agent.nodes.validation_helper import ValidationHelper
-from job_writing_agent.utils.app_log.logging_decorators import (
-    log_async,
-    log_execution,
-)
 
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
-# Data Loading Subgraph Node Functions
-# ============================================================================
-
-
-@log_async
 async def set_agent_system_message_node(state: DataLoadState) -> DataLoadState:
     """
     Node function to initialize system message in workflow state.
@@ -53,7 +44,6 @@ async def set_agent_system_message_node(state: DataLoadState) -> DataLoadState:
     return await initializer.set_agent_system_message(state)
 
 
-@log_async
 async def parse_resume_node(state: DataLoadState) -> DataLoadState:
     """
     Node to parse resume in parallel with job description parsing.
@@ -88,7 +78,6 @@ async def parse_resume_node(state: DataLoadState) -> DataLoadState:
     }
 
 
-@log_async
 async def parse_job_description_node(state: DataLoadState) -> DataLoadState:
     """
     Node to parse job description in parallel with resume parsing.
@@ -97,12 +86,10 @@ async def parse_job_description_node(state: DataLoadState) -> DataLoadState:
     Returns only the job description data - reducer will merge with resume data.
 
     Parameters
-    ----------
     state: DataLoadState
         Current workflow state containing job_description_source.
 
     Returns
-    -------
     DataLoadState
         Partial state update with job description and company name in
         company_research_data. LangGraph will merge this with other parallel updates.
@@ -129,7 +116,6 @@ async def parse_job_description_node(state: DataLoadState) -> DataLoadState:
     }
 
 
-@log_execution
 def aggregate_data_loading_results(state: DataLoadState) -> DataLoadState:
     """
     Aggregate results from parallel resume and job description parsing nodes.
@@ -148,7 +134,6 @@ def aggregate_data_loading_results(state: DataLoadState) -> DataLoadState:
         Current workflow state with parallel parsing results.
 
     Returns
-    -------
     DataLoadState
         Updated state with normalized and structured company_research_data.
     """
@@ -203,7 +188,6 @@ def aggregate_data_loading_results(state: DataLoadState) -> DataLoadState:
     return state
 
 
-@log_execution
 def verify_inputs_node(state: DataLoadState) -> DataLoadState:
     """
     Verify that required inputs are present and set next_node for routing.
@@ -218,7 +202,6 @@ def verify_inputs_node(state: DataLoadState) -> DataLoadState:
         Current workflow state with aggregated and normalized data.
 
     Returns
-    -------
     DataLoadState
         Updated state with next_node set for routing ("load" or "research").
     """
@@ -231,58 +214,46 @@ def verify_inputs_node(state: DataLoadState) -> DataLoadState:
 # ============================================================================
 
 # Create data loading subgraph
-data_loading_subgraph = StateGraph(DataLoadState)
+data_loading_subgraph = StateGraph(
+    input_schema=DataLoadState,
+    state_schema=DataLoadState,
+    output_schema=DataLoadState,
+)
 
 # Add subgraph nodes
 data_loading_subgraph.add_node(
-    "set_agent_system_message", 
-    set_agent_system_message_node)
+    "set_agent_system_message", set_agent_system_message_node
+)
+
+data_loading_subgraph.add_node("parse_resume", parse_resume_node)
 
 data_loading_subgraph.add_node(
-    "parse_resume", 
-    parse_resume_node)
+    "parse_job_description", parse_job_description_node
+)
 
 data_loading_subgraph.add_node(
-    "parse_job_description",
-    parse_job_description_node)
+    "aggregate_results", aggregate_data_loading_results
+)
 
-data_loading_subgraph.add_node(
-    "aggregate_results",
-    aggregate_data_loading_results)
-
-data_loading_subgraph.add_node(
-    "verify_inputs",
-    verify_inputs_node)
+data_loading_subgraph.add_node("verify_inputs", verify_inputs_node)
 
 # Add subgraph edges
-data_loading_subgraph.add_edge(
-    START,
-    "set_agent_system_message")
+data_loading_subgraph.add_edge(START, "set_agent_system_message")
 
 # Parallel execution: both nodes start after set_agent_system_message
-data_loading_subgraph.add_edge(
-    "set_agent_system_message",
-    "parse_resume")
+data_loading_subgraph.add_edge("set_agent_system_message", "parse_resume")
 
 data_loading_subgraph.add_edge(
-    "set_agent_system_message",
-    "parse_job_description")
+    "set_agent_system_message", "parse_job_description"
+)
 
 # Both parallel nodes feed into aggregate (LangGraph waits for both)
-data_loading_subgraph.add_edge(
-    "parse_resume",
-    "aggregate_results")
+data_loading_subgraph.add_edge("parse_resume", "aggregate_results")
 
-data_loading_subgraph.add_edge(
-    "parse_job_description",
-    "aggregate_results")
+data_loading_subgraph.add_edge("parse_job_description", "aggregate_results")
 
-data_loading_subgraph.add_edge(
-    "aggregate_results",
-    "verify_inputs")
+data_loading_subgraph.add_edge("aggregate_results", "verify_inputs")
 
-data_loading_subgraph.add_edge(
-    "verify_inputs",
-    END)
+data_loading_subgraph.add_edge("verify_inputs", END)
 
 data_loading_workflow = data_loading_subgraph.compile()

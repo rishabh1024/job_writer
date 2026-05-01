@@ -8,11 +8,14 @@ writer workflow graph, each handling a specific step in the process.
 # Standard library imports
 import logging
 from datetime import datetime
-from langgraph.types import interrupt
 
 # Third-party imports
 from langchain_core.messages import SystemMessage
-from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
+from langchain_core.prompts import (
+    ChatPromptTemplate,
+    HumanMessagePromptTemplate,
+)
+from langgraph.types import interrupt
 
 # Local imports
 from ..classes.classes import AppState, ResearchState, ResultState
@@ -57,7 +60,9 @@ def create_draft(state: ResearchState) -> ResultState:
     content_category = state.get("content_category", "cover_letter")
 
     # Select appropriate system message template based on content category
-    logger.info(f"The candidate wants the Agent to assist with : {content_category}")
+    logger.info(
+        f"The candidate wants the Agent to assist with : {content_category}"
+    )
     system_message_template = draft_category_map.get(
         content_category, COVER_LETTER_PROMPT
     )
@@ -82,10 +87,13 @@ def create_draft(state: ResearchState) -> ResultState:
 
     # Prepare the inputs with safe dictionary access
     application_background_data = {
-        "current_job_role": company_background_information.get("job_description", ""),
+        "current_job_role": company_background_information.get(
+            "job_description", ""
+        ),
         "candidate_resume": company_background_information.get("resume", ""),
         "company_research_data": company_background_information.get(
-            "company_research_data_summary", "Company Research Data is not available"
+            "company_research_data_summary",
+            "Company Research Data is not available",
         ),
         "current_date": CURRENT_DATE,
     }
@@ -224,7 +232,9 @@ def human_approval(state: ResultState) -> ResultState:
     """Human-in-the-loop checkpoint for feedback on the draft."""
     # Validate and extract all required state fields once
     draft_content = state.get("draft", "")
-    critique_feedback_content = state.get("critique_feedback", "No critique available")
+    critique_feedback_content = state.get(
+        "critique_feedback", "No critique available"
+    )
 
     # Display draft and critique for review
     print("\n" + "=" * 80)
@@ -233,7 +243,9 @@ def human_approval(state: ResultState) -> ResultState:
     print("\nAUTOMATIC CRITIQUE:")
     print(critique_feedback_content)
     print("=" * 80)
-    print("\nPlease provide your feedback (press Enter to continue with no changes):")
+    print(
+        "\nPlease provide your feedback (press Enter to continue with no changes):"
+    )
 
     # In a real implementation, this would be handled by the UI
     human_feedback = interrupt(
@@ -242,8 +254,6 @@ def human_approval(state: ResultState) -> ResultState:
             "message": "Please review the draft and provide feedback (empty string to approve as-is)",
         }
     )
-
-    print(f"Human feedback: {human_feedback}")
 
     return ResultState(
         draft=state.get("draft", ""),

@@ -1,15 +1,24 @@
-import os
 import logging
-
+import os
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Literal
+from typing import Any, Dict, Literal
 
-from langchain_core.language_models.chat_models import BaseChatModel
+import langchain_openai.chat_models.base as base_mod
+
+# Fix the breaking change in langchain-openai 0.3.5+
+# by mapping the old function name to the new one
+if not hasattr(base_mod, "_convert_chunk_to_generation_chunk"):
+    if hasattr(base_mod, "_convert_responses_chunk_to_generation_chunk"):
+        base_mod._convert_chunk_to_generation_chunk = (
+            base_mod._convert_responses_chunk_to_generation_chunk
+        )
+
+
+import dspy
+from langchain_cerebras import ChatCerebras
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
-from langchain_cerebras import ChatCerebras
 from pydantic import SecretStr
-import dspy
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +67,7 @@ class LLMProvider(ABC):
         model: str,
         framework: Literal["langchain", "dspy"] = "langchain",
         **config,
-    ) -> BaseChatModel | dspy.LM:
+    ):
         """Create LLM instance for specified framework."""
         defaults = self.get_default_config()
 
@@ -93,7 +102,7 @@ class LLMProvider(ABC):
             raise ValueError(f"Unsupported framework: {framework}")
 
     @abstractmethod
-    def _create_langchain_instance(self, model: str, **config) -> BaseChatModel:
+    def _create_langchain_instance(self, model: str, **config):
         pass
 
     @abstractmethod
@@ -328,7 +337,9 @@ class OllamaChatProvider(LLMProvider):
         return config
 
     def _create_langchain_instance(self, model: str, **config) -> ChatOllama:
-        return ChatOllama(model=self.format_model_name_for_provider(model), **config)
+        return ChatOllama(
+            model=self.format_model_name_for_provider(model), **config
+        )
 
     def _create_dspy_instance(self, model: str, **config) -> dspy.LM:
         return dspy.LM(

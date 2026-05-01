@@ -1,11 +1,13 @@
 """
 State definitions for the Job Writer LangGraph Workflow.
 """
+
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Annotated
-from typing_extensions import List, Dict, Any
+
 from langgraph.graph import MessagesState
-from dataclasses import dataclass
+from typing_extensions import Any, Dict, List
 
 
 def merge_dict_reducer(
@@ -80,9 +82,9 @@ class DataLoadState(MessagesState, total=False):
     company_name: str
     current_node: str
     next_node: str  # For routing after data loading subgraph
+
     # Use Annotated with reducer to allow parallel nodes to merge dictionary updates
     company_research_data: Annotated[Dict[str, Any], merge_dict_reducer]
-    # Result fields (added for final output - optional, populated later)
     draft: str
     feedback: str
     critique_feedback: str
@@ -119,8 +121,10 @@ class ResultState(MessagesState):
     company_research_data: Dict[str, Any]
     output_data: str
 
-class NodeName(StrEnum):
+
+class node_name(StrEnum):
     """Node names for the job application workflow graph."""
+
     LOAD = "load"
     RESEARCH_SUBGRAPH_ADAPTER = "to_research_adapter"
     RESEARCH = "research"

@@ -41,6 +41,7 @@ requirements.txt
 .langgraph_api/*
 src/job_writing_agent/logs/*
 docker-compose.override.example.yml
+scripts/*
 
 # Binary files (PDFs, images, etc.)
 *.pdf

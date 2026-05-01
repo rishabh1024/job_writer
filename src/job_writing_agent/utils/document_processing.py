@@ -11,19 +11,26 @@ from urllib.parse import urlparse
 
 # Third-party imports
 import dspy
-from langchain_community.document_loaders import PyPDFLoader, AsyncChromiumLoader
+from langchain_community.document_loaders import (
+    AsyncChromiumLoader,
+    PyPDFLoader,
+)
 from langchain_community.document_transformers import Html2TextTransformer
 from langchain_core.documents import Document
 from langchain_text_splitters import (
-    RecursiveCharacterTextSplitter,
     MarkdownHeaderTextSplitter,
+    RecursiveCharacterTextSplitter,
 )
 from langfuse import observe
 from pydantic import BaseModel, Field
 from typing_extensions import Any
 
 # Local imports
-from .errors import JobDescriptionParsingError, LLMProcessingError, URLExtractionError
+from .errors import (
+    JobDescriptionParsingError,
+    LLMProcessingError,
+    URLExtractionError,
+)
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -76,7 +83,9 @@ class JobDescriptionComponents(BaseModel):
 
     company_name: str = Field(description="The company name")
     job_description: str = Field(description="The job description")
-    reasoning: str = Field(description="The reasoning for the extracted information")
+    reasoning: str = Field(
+        description="The reasoning for the extracted information"
+    )
 
 
 class ExtractJobDescription(dspy.Signature):
@@ -94,7 +103,9 @@ class ExtractJobDescription(dspy.Signature):
     )
     job_role = dspy.OutputField(desc="The job role in the posting.")
     company_name = dspy.OutputField(desc="Company Name of the Job listing.")
-    location = dspy.OutputField(desc="The location for the provided job posting.")
+    location = dspy.OutputField(
+        desc="The location for the provided job posting."
+    )
 
 
 @observe()
@@ -226,7 +237,9 @@ def identify_resume_sections(text: str) -> list[dict[str, Any]]:
         # Extract section content (excluding the header)
         section_content = text[start_pos:end_pos].strip()
 
-        sections.append({"title": section_title.lower(), "content": section_content})
+        sections.append(
+            {"title": section_title.lower(), "content": section_content}
+        )
 
     return sections
 
@@ -255,7 +268,9 @@ def _is_heading(line: str) -> bool:
     Returns:
         True if line appears to be a heading
     """
-    return line.isupper() and len(line.split()) <= 5 and not re.search(r"\d", line)
+    return (
+        line.isupper() and len(line.split()) <= 5 and not re.search(r"\d", line)
+    )
 
 
 def parse_resume(file_path: str | Path) -> list[Document]:
@@ -268,7 +283,9 @@ def parse_resume(file_path: str | Path) -> list[Document]:
     # Handle different file types
     if file_extension == ".pdf":
         text = (
-            PyPDFLoader(str(file_path), extraction_mode="layout").load()[0].page_content
+            PyPDFLoader(str(file_path), extraction_mode="layout")
+            .load()[0]
+            .page_content
         )
     elif file_extension == ".txt":
         try:
@@ -278,7 +295,9 @@ def parse_resume(file_path: str | Path) -> list[Document]:
                     raise ValueError("File is empty")
         except Exception as e:
             logger.error(f"Error reading text file: {str(e)}")
-            raise ValueError(f"Could not read text file: {file_path}. Error: {str(e)}")
+            raise ValueError(
+                f"Could not read text file: {file_path}. Error: {str(e)}"
+            )
     else:
         raise ValueError(
             f"Unsupported resume file type: {file_path}. Supported types: .pdf, .txt"
@@ -287,15 +306,21 @@ def parse_resume(file_path: str | Path) -> list[Document]:
     text = _collapse_ws(text)
 
     # Tag headings with "###" so Markdown splitter can see them
-    tagged_lines = [f"### {ln}" if _is_heading(ln) else ln for ln in text.splitlines()]
+    tagged_lines = [
+        f"### {ln}" if _is_heading(ln) else ln for ln in text.splitlines()
+    ]
 
     md_text = "\n".join(tagged_lines)
 
     if "###" in md_text:
-        splitter = MarkdownHeaderTextSplitter(headers_to_split_on=[("###", "section")])
+        splitter = MarkdownHeaderTextSplitter(
+            headers_to_split_on=[("###", "section")]
+        )
         chunks = splitter.split_text(md_text)  # already returns Documents
     else:
-        splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=50)
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=400, chunk_overlap=50
+        )
         chunks: list[Document] = [
             Document(page_content=chunk, metadata={})
             for chunk in splitter.split_text(md_text)
@@ -306,7 +331,7 @@ def parse_resume(file_path: str | Path) -> list[Document]:
     return chunks
 
 
-async def get_job_description(file_path_or_url: str) -> Document:
+def get_job_description(file_path_or_url: str) -> Document:
     """Parse a job description from a file or URL into chunks.
 
     Args:
@@ -317,7 +342,7 @@ async def get_job_description(file_path_or_url: str) -> Document:
     """
     # Check if the input is a URL
     if file_path_or_url.startswith(("http://", "https://")):
-        return await parse_job_description_from_url(file_path_or_url)
+        return parse_job_description_from_url(file_path_or_url)
 
     # Handle local files based on extension
     file_extension = Path(file_path_or_url).suffix.lower()
@@ -344,12 +369,12 @@ async def get_job_description(file_path_or_url: str) -> Document:
     )
 
 
-async def scrape_job_description_from_web(urls: list[str]) -> str:
+def scrape_job_description_from_web(urls: list[str]) -> str:
     """This function will first scrape the data from the job listing.
     Then using the recursive splitter using the different seperators,
     it preserves the paragraphs, lines and words"""
     loader = AsyncChromiumLoader(urls, headless=True)
-    scraped_data_documents = await loader.aload()
+    scraped_data_documents = loader.load()
 
     html2text = Html2TextTransformer()
     markdown_scraped_data_documents = html2text.transform_documents(
@@ -361,12 +386,14 @@ async def scrape_job_description_from_web(urls: list[str]) -> str:
         chunk_size=1000, chunk_overlap=0
     )
 
-    extracted_content = splitter.split_documents(markdown_scraped_data_documents)
+    extracted_content = splitter.split_documents(
+        markdown_scraped_data_documents
+    )
 
     return ".".join(doc.page_content for doc in extracted_content)
 
 
-async def parse_job_description_from_url(url: str) -> Document:
+def parse_job_description_from_url(url: str) -> Document:
     """Extracts and structures a job description from a URL using an LLM.
 
     This function fetches content from a URL, uses a DSPy to extract key details,
@@ -395,8 +422,7 @@ async def parse_job_description_from_url(url: str) -> Document:
     try:
         # 2. Fetch content from the URL
         try:
-            logger.info("Fetching content from URL...")
-            raw_content = await scrape_job_description_from_web([url])
+            raw_content = scrape_job_description_from_web([url])
             if not raw_content or not raw_content.strip():
                 raise URLExtractionError(
                     "Failed to extract any meaningful content from the URL."
@@ -414,7 +440,9 @@ async def parse_job_description_from_url(url: str) -> Document:
             # Configure DSPy LM with safe environment variable access
             cerebras_api_key = os.getenv("CEREBRAS_API_KEY")
             if not cerebras_api_key:
-                raise ValueError("CEREBRAS_API_KEY environment variable not set")
+                raise ValueError(
+                    "CEREBRAS_API_KEY environment variable not set"
+                )
 
             # Use dspy.context() for async tasks instead of dspy.configure()
             with dspy.context(
@@ -426,7 +454,9 @@ async def parse_job_description_from_url(url: str) -> Document:
                 )
             ):
                 job_extract_fn = dspy.Predict(ExtractJobDescription)
-                result = job_extract_fn(job_description_html_content=raw_content)
+                result = job_extract_fn(
+                    job_description_html_content=raw_content
+                )
             logger.info("Successfully processed job description with LLM.")
 
             # 4. Create the final Document with structured data
@@ -443,7 +473,9 @@ async def parse_job_description_from_url(url: str) -> Document:
 
         except Exception as e:
             # Wrap any LLM error into our custom exception
-            raise LLMProcessingError(f"Failed to process content with LLM: {e}") from e
+            raise LLMProcessingError(
+                f"Failed to process content with LLM: {e}"
+            ) from e
 
     # 5. Handle specific, known errors
     except LLMProcessingError as e:
@@ -452,7 +484,11 @@ async def parse_job_description_from_url(url: str) -> Document:
         if raw_content:
             return Document(
                 page_content=raw_content,
-                metadata={"company_name": "Unknown", "source": url, "error": str(e)},
+                metadata={
+                    "company_name": "Unknown",
+                    "source": url,
+                    "error": str(e),
+                },
             )
         # If raw_content is also None, then the failure was catastrophic.
         raise LLMProcessingError(
@@ -461,7 +497,9 @@ async def parse_job_description_from_url(url: str) -> Document:
 
     except URLExtractionError as e:
         logger.error(f"Could not extract content from URL: {e}")
-        raise URLExtractionError("Failed to extract content from the URL.") from e
+        raise URLExtractionError(
+            "Failed to extract content from the URL."
+        ) from e
 
     # 6. Catch any other unexpected errors
     except Exception as e:

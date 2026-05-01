@@ -10,10 +10,6 @@ Responsibility Principle by focusing solely on input validation.
 import logging
 
 from job_writing_agent.classes import DataLoadState
-from job_writing_agent.utils.app_log.logging_decorators import (
-    log_execution,
-    log_errors,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -22,11 +18,6 @@ class ValidationHelper:
     """
     Responsible for validating workflow inputs and setting routing decisions.
 
-
-    Example:
-        >>> validator = ValidationHelper()
-        >>> validated_state = validator.verify_inputs(state)
-        >>> next_node = validated_state.get("next_node")  # "load" or "research"
     """
 
     def __init__(self):
@@ -37,8 +28,6 @@ class ValidationHelper:
         """
         pass
 
-    @log_execution
-    @log_errors
     def verify_inputs(self, state: DataLoadState) -> DataLoadState:
         """
         Validate inputs and set next_node for routing.
@@ -66,7 +55,9 @@ class ValidationHelper:
             return state
 
         if not self._validate_job_description(state):
-            logger.error("Job description is missing or empty in company_research_data")
+            logger.error(
+                "Job description is missing or empty in company_research_data"
+            )
             state["next_node"] = "load"  # Loop back to load subgraph
             return state
 

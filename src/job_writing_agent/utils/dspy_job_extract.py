@@ -1,21 +1,23 @@
-import dspy
-import os
 import asyncio
+import os
+
+import dspy
 import mlflow
-from langchain_community.document_loaders import PyPDFLoader, WebBaseLoader, AsyncChromiumLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import (
+    AsyncChromiumLoader,
+    WebBaseLoader,
+)
 from langchain_community.document_transformers import Html2TextTransformer
-import trafilatura
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-
-os.environ['CEREBRAS_API_KEY'] = "csk-m28t6w8vk6pjn3rdrtwtdjkynjh5hxfe29dtx2hnjedft9he"
+os.environ["CEREBRAS_API_KEY"] = (
+    "csk-m28t6w8vk6pjn3rdrtwtdjkynjh5hxfe29dtx2hnjedft9he"
+)
 
 
 mlflow.dspy.autolog(
-    log_compiles=True,
-    log_evals=True,
-    log_traces_from_compile=True
-    )
+    log_compiles=True, log_evals=True, log_traces_from_compile=True
+)
 
 mlflow.set_tracking_uri("http://127.0.0.1:5000/")
 mlflow.set_experiment("job description extract")
@@ -27,20 +29,27 @@ class ExtractJobDescription(dspy.Signature):
     Role Introduction,Qualifications and Requirements, Prefrred Qualifications, Salary, Location.
     Do not alter the content of the job description.
     """
-    job_description_html_content = dspy.InputField(desc="HTML content of the job posting.")
-    job_description = dspy.OutputField(desc="Clean job description which is free of HTML tags and irrelevant information.")
+
+    job_description_html_content = dspy.InputField(
+        desc="HTML content of the job posting."
+    )
+    job_description = dspy.OutputField(
+        desc="Clean job description which is free of HTML tags and irrelevant information."
+    )
     job_role = dspy.OutputField(desc="The job role in the posting.")
     company_name = dspy.OutputField(desc="Company Name of the Job listing.")
-    location = dspy.OutputField(desc="The location for the provided job posting.")
+    location = dspy.OutputField(
+        desc="The location for the provided job posting."
+    )
 
 
 def get_job_description(url: str):
     loader = WebBaseLoader(url)
     text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=1000,
-                chunk_overlap=200,
-                separators=["\n\n", "\n", ". ", " ", ""]
-            )
+        chunk_size=1000,
+        chunk_overlap=200,
+        separators=["\n\n", "\n", ". ", " ", ""],
+    )
     document_splitted = loader.load_and_split(text_splitter=text_splitter)
 
     extracted_text = " ".join(doc.page_content for doc in document_splitted)
@@ -48,7 +57,9 @@ def get_job_description(url: str):
 
 
 async def scrape_with_playwright(urls):
-    loader = AsyncChromiumLoader(urls, headless=True, user_agent="Mozilla/5.0 (compatible)")
+    loader = AsyncChromiumLoader(
+        urls, headless=True, user_agent="Mozilla/5.0 (compatible)"
+    )
     docs = await loader.aload()
 
     html2text = Html2TextTransformer()
@@ -65,6 +76,8 @@ async def scrape_with_playwright(urls):
     return extracted_content
 
 
-urls = ["https://jobs.ashbyhq.com/MotherDuck/c11f6d31-64e9-4964-85dd-c5b25eee55bc"]
+urls = [
+    "https://jobs.ashbyhq.com/MotherDuck/c11f6d31-64e9-4964-85dd-c5b25eee55bc"
+]
 asyncio.run(scrape_with_playwright(urls))
 # print(extracted_content)

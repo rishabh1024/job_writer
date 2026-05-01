@@ -8,7 +8,7 @@ from typing import Any
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tracers import ConsoleCallbackHandler, LangChainTracer
 
-from job_writing_agent.classes import DataLoadState, NodeName
+from job_writing_agent.classes import DataLoadState, node_name
 
 logger = logging.getLogger(__name__)
 
@@ -16,11 +16,6 @@ logger = logging.getLogger(__name__)
 class JobWorkflow:
     """
     Workflow orchestrator for the job application writer.
-
-    This class coordinates the execution of the job application writing workflow,
-    managing the LangGraph state machine and LangSmith tracing. It follows the
-    orchestrator pattern, coordinating multiple subgraphs and nodes without
-    implementing business logic itself.
 
     The workflow consists of:
     1. Data Loading: Parse resume and job description (parallel subgraph)
@@ -158,6 +153,7 @@ class JobWorkflow:
             in the "output_data" field, or None if execution fails.
         """
         from job_writing_agent.graph import job_app_graph
+
         try:
             compiled_graph = job_app_graph
         except Exception as exc:
@@ -169,7 +165,7 @@ class JobWorkflow:
         config: RunnableConfig = self._build_runnable_config()
 
         try:
-            initial_workflow_state["current_node"] = NodeName.LOAD
+            initial_workflow_state["current_node"] = node_name.LOAD
             logger.info(
                 "Starting workflow execution: %s (content_type=%s, session_id=%s)",
                 run_name,
@@ -185,5 +181,3 @@ class JobWorkflow:
         except Exception as exc:
             logger.error("Error running graph: %s", exc, exc_info=True)
             return None
-
-

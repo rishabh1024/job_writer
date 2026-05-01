@@ -8,7 +8,7 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
-def print_result(content_type: str, final_content: str):
+def _print_result(content_type: str, final_content: str):
     """
     Prints the final generated content to the console with formatting.
 
@@ -21,7 +21,7 @@ def print_result(content_type: str, final_content: str):
     print("=" * 80)
 
 
-def save_result(content_type: str, final_content: str) -> str:
+def _save_result(content_type: str, final_content: str) -> str:
     """
     Saves the final generated content to a timestamped text file.
 
