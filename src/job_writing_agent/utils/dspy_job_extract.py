@@ -2,7 +2,6 @@ import asyncio
 import os
 
 import dspy
-import mlflow
 from langchain_community.document_loaders import (
     AsyncChromiumLoader,
     WebBaseLoader,
@@ -10,17 +9,19 @@ from langchain_community.document_loaders import (
 from langchain_community.document_transformers import Html2TextTransformer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-os.environ["CEREBRAS_API_KEY"] = (
-    "csk-m28t6w8vk6pjn3rdrtwtdjkynjh5hxfe29dtx2hnjedft9he"
-)
+try:
+    import mlflow
 
+    _MLFLOW_AVAILABLE = True
+except ImportError:
+    _MLFLOW_AVAILABLE = False
 
-mlflow.dspy.autolog(
-    log_compiles=True, log_evals=True, log_traces_from_compile=True
-)
-
-mlflow.set_tracking_uri("http://127.0.0.1:5000/")
-mlflow.set_experiment("job description extract")
+if _MLFLOW_AVAILABLE:
+    mlflow.dspy.autolog(
+        log_compiles=True, log_evals=True, log_traces_from_compile=True
+    )
+    mlflow.set_tracking_uri("http://127.0.0.1:5000/")
+    mlflow.set_experiment("job description extract")
 
 
 class ExtractJobDescription(dspy.Signature):
