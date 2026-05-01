@@ -29,9 +29,11 @@ logger = get_logger(__name__)
 PAGE_TIMEOUT_MS: int = 30_000
 SLOW_RESPONSE_THRESHOLD_S: float = 15.0
 
-# Structured AgentQL query covering the standard fields found on most job
-# boards.  All fields are optional from the scraper's perspective — AgentQL
-# returns None for fields it cannot locate on the page.
+# ---------------------------------------------------------------------------
+# Bare AQL query — field names only, no context hints.
+# Used as the Method A baseline so results can be compared against the
+# context-enriched variant below.
+# ---------------------------------------------------------------------------
 JOB_DESCRIPTION_QUERY: str = """
 {
     job_title
@@ -49,12 +51,48 @@ JOB_DESCRIPTION_QUERY: str = """
 }
 """
 
-# Natural-language fallback prompt used when the structured AQL query returns
-# mostly empty fields (e.g. heavily JavaScript-rendered boards).
-JOB_DESCRIPTION_NL_PROMPT: str = (
-    "Extract all job description details including job title, company name, "
-    "location, employment type, salary, summary, responsibilities, "
-    "requirements, preferred qualifications, benefits, and deadline."
+# ---------------------------------------------------------------------------
+# Context-enriched AQL query — applies both AgentQL best practices:
+#
+#   1. Semantic context: parentheses descriptions on every field guide AgentQL
+#      to the correct element when multiple candidates share similar text.
+#      e.g.  job_title(the h1 or prominent heading naming the role)
+#
+#   2. Structural context: list fields that belong to the same prose section
+#      are nested under a job_description_section container, mirroring the
+#      typical DOM hierarchy of a job-posting page and reducing ambiguity
+#      with unrelated lists (nav links, footer items, etc.).
+#
+# Reference: https://docs.agentql.com/agentql-query/best-practices
+# ---------------------------------------------------------------------------
+JOB_DESCRIPTION_QUERY_WITH_CONTEXT: str = """
+{
+    job_title(the h1 or prominent heading that names the open role)
+    company_name(the name of the hiring organisation or employer)
+    job_location(office city, region, country or remote label for the role)
+    employment_type(full-time, part-time, contract or internship label)
+    salary_range(compensation, pay or salary range shown on the posting)
+    remote_policy(remote, hybrid or on-site work arrangement for the role)
+    application_deadline(closing date or apply-by date for the role)
+    job_description_section(the main body section of the job posting) {
+        job_summary(introductory paragraph or overview of the role)
+        responsibilities(list of duties and day-to-day tasks for the role)[]
+        requirements(mandatory qualifications, skills or experience needed)[]
+        preferred_qualifications(nice-to-have or bonus qualifications)[]
+        benefits(perks, compensation extras or employee benefits listed)[]
+    }
+}
+"""
+
+# Prompt for the experimental prompt-based extraction method.
+# Passed to get_data_by_prompt_experimental() which uses a different
+# (non-AQL) inference path on the AgentQL backend.
+JOB_DESCRIPTION_PROMPT: str = (
+    "Extract all job description details: job title, company name, "
+    "location, employment type, salary range, remote policy, "
+    "application deadline, job summary, list of responsibilities, "
+    "list of requirements, list of preferred qualifications, "
+    "and list of benefits."
 )
 
 
@@ -78,10 +116,23 @@ class ScraperError(Exception):
 
 
 class ExtractionMethod(StrEnum):
-    """Supported extraction strategies."""
+    """Supported extraction strategies.
+
+    Attributes:
+        AQL_STRUCTURED: Bare AQL query with field names only.  Useful as a
+            baseline to measure the uplift from adding context hints.
+        AQL_WITH_CONTEXT: AQL query enriched with semantic context
+            descriptions ``(...)`` on every field and structural nesting for
+            the main description section.  This is the recommended approach
+            per AgentQL best practices.
+        PROMPT_EXPERIMENTAL: Free-form natural-language prompt passed to
+            ``get_data_by_prompt_experimental()``.  Uses a different AgentQL
+            inference path that does not require an AQL query.
+    """
 
     AQL_STRUCTURED = "aql_structured"
-    AQL_NATURAL_LANGUAGE = "aql_natural_language"
+    AQL_WITH_CONTEXT = "aql_with_context"
+    PROMPT_EXPERIMENTAL = "prompt_experimental"
 
 
 @dataclass
@@ -179,13 +230,50 @@ def _navigate_to_url(page: Page, url: str) -> None:
         raise ScraperError(url, f"Navigation failed: {exc}") from exc
 
 
+def _flatten_context_response(raw: dict) -> dict:
+    """Hoist nested ``job_description_section`` fields up to the top level.
+
+    ``JOB_DESCRIPTION_QUERY_WITH_CONTEXT`` nests ``job_summary``,
+    ``responsibilities``, ``requirements``, ``preferred_qualifications``, and
+    ``benefits`` inside a ``job_description_section`` container.  This helper
+    merges those fields back into a flat dict so ``_parse_aql_response`` can
+    use a single code path regardless of which query was used.
+
+    Args:
+        raw: Dictionary returned by ``page.query_data()`` when the context
+            query was used.
+
+    Returns:
+        A new flat dict with all top-level and nested content fields merged.
+    """
+    section: dict = raw.get("job_description_section") or {}
+    return {
+        "job_title": raw.get("job_title"),
+        "company_name": raw.get("company_name"),
+        "job_location": raw.get("job_location"),
+        "employment_type": raw.get("employment_type"),
+        "salary_range": raw.get("salary_range"),
+        "remote_policy": raw.get("remote_policy"),
+        "application_deadline": raw.get("application_deadline"),
+        "job_summary": section.get("job_summary"),
+        "responsibilities": section.get("responsibilities"),
+        "requirements": section.get("requirements"),
+        "preferred_qualifications": section.get("preferred_qualifications"),
+        "benefits": section.get("benefits"),
+    }
+
+
 def _parse_aql_response(
     raw: dict, url: str, method: ExtractionMethod
 ) -> JobExtract:
     """Convert a raw AgentQL ``query_data`` dict into a ``JobExtract``.
 
+    Handles both flat (``AQL_STRUCTURED`` / ``PROMPT_EXPERIMENTAL``) and
+    nested (``AQL_WITH_CONTEXT``) response shapes transparently.
+
     Args:
-        raw: Dictionary returned by ``page.query_data()``.
+        raw: Dictionary returned by ``page.query_data()`` or
+            ``page.get_data_by_prompt_experimental()``.
         url: Source URL (stored in the result for traceability).
         method: Extraction method tag to stamp on the result.
 
@@ -194,21 +282,26 @@ def _parse_aql_response(
     """
     logger.debug("Raw AgentQL response for %s: %s", url, raw)
 
+    if method == ExtractionMethod.AQL_WITH_CONTEXT:
+        flat = _flatten_context_response(raw)
+    else:
+        flat = raw
+
     extract = JobExtract(
         url=url,
         method=method,
-        job_title=raw.get("job_title"),
-        company_name=raw.get("company_name"),
-        job_location=raw.get("job_location"),
-        employment_type=raw.get("employment_type"),
-        salary_range=raw.get("salary_range"),
-        job_summary=raw.get("job_summary"),
-        responsibilities=raw.get("responsibilities") or [],
-        requirements=raw.get("requirements") or [],
-        preferred_qualifications=raw.get("preferred_qualifications") or [],
-        benefits=raw.get("benefits") or [],
-        application_deadline=raw.get("application_deadline"),
-        remote_policy=raw.get("remote_policy"),
+        job_title=flat.get("job_title"),
+        company_name=flat.get("company_name"),
+        job_location=flat.get("job_location"),
+        employment_type=flat.get("employment_type"),
+        salary_range=flat.get("salary_range"),
+        job_summary=flat.get("job_summary"),
+        responsibilities=flat.get("responsibilities") or [],
+        requirements=flat.get("requirements") or [],
+        preferred_qualifications=flat.get("preferred_qualifications") or [],
+        benefits=flat.get("benefits") or [],
+        application_deadline=flat.get("application_deadline"),
+        remote_policy=flat.get("remote_policy"),
     )
     extract.populated_fields = _count_populated_fields(extract)
     return extract
@@ -305,8 +398,14 @@ def extract_job_data(
 
         if method == ExtractionMethod.AQL_STRUCTURED:
             raw: dict = page.query_data(JOB_DESCRIPTION_QUERY)
+        elif method == ExtractionMethod.AQL_WITH_CONTEXT:
+            raw = page.query_data(JOB_DESCRIPTION_QUERY_WITH_CONTEXT)
         else:
-            raw = page.query_data(JOB_DESCRIPTION_NL_PROMPT)
+            # PROMPT_EXPERIMENTAL uses a separate AgentQL inference path
+            # that accepts free-form natural language instead of an AQL query.
+            raw = page.get_data_by_prompt_experimental(
+                JOB_DESCRIPTION_PROMPT
+            )
 
         elapsed_s = time.monotonic() - start_time
         extract = _parse_aql_response(raw, url, method)
