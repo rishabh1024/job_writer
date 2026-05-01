@@ -85,7 +85,7 @@ dependencies = [
     "langgraph>=0.6.0,<1.0.0",
     "langgraph-checkpoint-mongodb>=0.2.2",
     "langgraph-runtime-inmem>=0.20.0,<0.21.0",
-    "langgraph-sdk",
+    "langgraph-sdk>=0.2.0,<0.3.0",
     "langgraph-store-mongodb>=0.1.1",
     "langmem>=0.0.30",
     "langsmith>=0.6.3",
