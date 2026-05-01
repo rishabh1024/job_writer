@@ -42,6 +42,7 @@ requirements.txt
 src/job_writing_agent/logs/*
 docker-compose.override.example.yml
 scripts/*
+logs/*
 
 # Binary files (PDFs, images, etc.)
 *.pdf

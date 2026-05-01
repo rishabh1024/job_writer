@@ -331,7 +331,7 @@ def parse_resume(file_path: str | Path) -> list[Document]:
     return chunks
 
 
-def get_job_description(file_path_or_url: str) -> Document:
+async def get_job_description(file_path_or_url: str) -> Document:
     """Parse a job description from a file or URL into chunks.
 
     Args:
@@ -342,7 +342,7 @@ def get_job_description(file_path_or_url: str) -> Document:
     """
     # Check if the input is a URL
     if file_path_or_url.startswith(("http://", "https://")):
-        return parse_job_description_from_url(file_path_or_url)
+        return await parse_job_description_from_url(file_path_or_url)
 
     # Handle local files based on extension
     file_extension = Path(file_path_or_url).suffix.lower()
@@ -369,12 +369,12 @@ def get_job_description(file_path_or_url: str) -> Document:
     )
 
 
-def scrape_job_description_from_web(urls: list[str]) -> str:
+async def scrape_job_description_from_web(urls: list[str]) -> str:
     """This function will first scrape the data from the job listing.
     Then using the recursive splitter using the different seperators,
     it preserves the paragraphs, lines and words"""
     loader = AsyncChromiumLoader(urls, headless=True)
-    scraped_data_documents = loader.load()
+    scraped_data_documents = await loader.aload()
 
     html2text = Html2TextTransformer()
     markdown_scraped_data_documents = html2text.transform_documents(
@@ -393,7 +393,7 @@ def scrape_job_description_from_web(urls: list[str]) -> str:
     return ".".join(doc.page_content for doc in extracted_content)
 
 
-def parse_job_description_from_url(url: str) -> Document:
+async def parse_job_description_from_url(url: str) -> Document:
     """Extracts and structures a job description from a URL using an LLM.
 
     This function fetches content from a URL, uses a DSPy to extract key details,
@@ -422,7 +422,7 @@ def parse_job_description_from_url(url: str) -> Document:
     try:
         # 2. Fetch content from the URL
         try:
-            raw_content = scrape_job_description_from_web([url])
+            raw_content = await scrape_job_description_from_web([url])
             if not raw_content or not raw_content.strip():
                 raise URLExtractionError(
                     "Failed to extract any meaningful content from the URL."

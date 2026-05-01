@@ -14,7 +14,6 @@ from typing import Any
 from langgraph.graph import END, START, StateGraph
 
 from job_writing_agent.classes import DataLoadState
-from job_writing_agent.classes.classes import DataLoadState
 from job_writing_agent.nodes.job_description_loader import JobDescriptionLoader
 from job_writing_agent.nodes.resume_loader import ResumeLoader
 from job_writing_agent.nodes.system_initializer import SystemInitializer
