@@ -1,8 +1,15 @@
 """AgentQL job-description scraper experiment.
 
-Runs structured extraction (AQL query) and natural-language extraction
-(AgentQL NL prompt) on 10 diverse job-posting URLs, then persists results to
-JSON and emits a comparison table to the console.
+Runs three extraction methods on 10 diverse job-posting URLs (30 trials):
+
+* Method A — ``AQL_STRUCTURED``: bare AQL query, field names only (baseline)
+* Method B — ``AQL_WITH_CONTEXT``: AQL query enriched with semantic context
+  descriptions ``(...)`` per field and structural nesting for the main
+  description section (AgentQL best-practice approach)
+* Method C — ``PROMPT_EXPERIMENTAL``: free-form natural language prompt passed
+  to ``get_data_by_prompt_experimental()``
+
+Results are persisted to JSON and a comparison table is printed to the console.
 
 Usage (PowerShell)::
 
@@ -397,7 +404,8 @@ def run_experiment(job_urls: list[str]) -> ExperimentReport:
     run_id = datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     methods = [
         ExtractionMethod.AQL_STRUCTURED,
-        ExtractionMethod.AQL_NATURAL_LANGUAGE,
+        ExtractionMethod.AQL_WITH_CONTEXT,
+        ExtractionMethod.PROMPT_EXPERIMENTAL,
     ]
     total_trials = len(job_urls) * len(methods)
     results: list[ExperimentResult] = []
