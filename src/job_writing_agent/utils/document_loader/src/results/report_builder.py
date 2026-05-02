@@ -13,19 +13,13 @@ Generates a human-readable ``.md`` file structured as:
 
     ## URL 1 — <url>
 
-    ### Strategy: AQL Structured (baseline)
+    ### Strategy: AQL With Context
     - **Status**: OK
-    - **Fields extracted**: 9 / 12
+    - **Fields extracted**: 7 / 8
     - **Scrape time**: 4 200 ms
     | Field | Value |
     |---|---|
     | job_title | Staff Engineer |
-    ...
-
-    ### Strategy: AQL With Context (best practice)
-    ...
-
-    ### Strategy: Prompt Experimental
     ...
 
     ---
@@ -46,9 +40,7 @@ from typing import TYPE_CHECKING
 from job_writing_agent.utils.app_log.logging_config import get_logger
 from job_writing_agent.utils.app_log.logging_decorators import log_execution
 from job_writing_agent.utils.document_loader.src.strategies import (
-    AqlStructuredStrategy,
     AqlWithContextStrategy,
-    PromptExperimentalStrategy,
 )
 
 if TYPE_CHECKING:
@@ -126,9 +118,7 @@ def _render_strategy_section(result: ExperimentResult) -> str:
         Multi-line markdown string for this strategy section.
     """
     strategy_descriptions = {
-        "aql_structured": AqlStructuredStrategy().description,
         "aql_with_context": AqlWithContextStrategy().description,
-        "prompt_experimental": PromptExperimentalStrategy().description,
     }
 
     method_label = str(result.method).replace("_", " ").title()

@@ -1,14 +1,4 @@
-"""Unit tests for agentql_job_scraper module.
-
-All tests run without a browser or an AgentQL API key.  They cover:
-
-- Module-level constants (query syntax, enum values)
-- Pure data-transformation helpers (_flatten_context_response,
-  _parse_aql_response, _count_populated_fields)
-- Data models (JobExtract defaults, ScraperError attributes)
-- AgentQlJobScraper class (strategy injection, scrape delegation)
-- extract_job_data shim (strategy-map routing)
-"""
+"""Unit tests for agentql_job_scraper module."""
 
 from __future__ import annotations
 
@@ -18,8 +8,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from job_writing_agent.utils.document_loader.src.agentql_job_scraper import (
-    JOB_DESCRIPTION_PROMPT,
-    JOB_DESCRIPTION_QUERY,
     JOB_DESCRIPTION_QUERY_WITH_CONTEXT,
     AgentQlJobScraper,
     ExtractionMethod,
@@ -30,9 +18,7 @@ from job_writing_agent.utils.document_loader.src.agentql_job_scraper import (
     _parse_aql_response,
 )
 from job_writing_agent.utils.document_loader.src.strategies import (
-    AqlStructuredStrategy,
     AqlWithContextStrategy,
-    PromptExperimentalStrategy,
 )
 
 
@@ -48,10 +34,6 @@ def raw_context_response() -> dict:
         "job_title": "Staff Engineer",
         "company_name": "Acme Corp",
         "job_location": "Remote",
-        "employment_type": "Full-time",
-        "salary_range": "120k-160k",
-        "remote_policy": "Remote",
-        "application_deadline": None,
         "job_description_section": {
             "job_summary": "Build great things.",
             "responsibilities": ["Design systems", "Review code"],
@@ -62,25 +44,6 @@ def raw_context_response() -> dict:
     }
 
 
-@pytest.fixture()
-def raw_flat_response() -> dict:
-    """Simulated AgentQL response for AQL_STRUCTURED query."""
-    return {
-        "job_title": "Backend Engineer",
-        "company_name": "Beta Inc",
-        "job_location": "NYC",
-        "employment_type": None,
-        "salary_range": None,
-        "job_summary": "Maintain APIs.",
-        "responsibilities": ["Write code"],
-        "requirements": [],
-        "preferred_qualifications": [],
-        "benefits": [],
-        "application_deadline": None,
-        "remote_policy": None,
-    }
-
-
 # ---------------------------------------------------------------------------
 # ExtractionMethod
 # ---------------------------------------------------------------------------
@@ -88,12 +51,10 @@ def raw_flat_response() -> dict:
 
 class TestExtractionMethod:
     def test_enum_values(self) -> None:
-        assert ExtractionMethod.AQL_STRUCTURED == "aql_structured"
         assert ExtractionMethod.AQL_WITH_CONTEXT == "aql_with_context"
-        assert ExtractionMethod.PROMPT_EXPERIMENTAL == "prompt_experimental"
 
-    def test_three_methods_defined(self) -> None:
-        assert len(ExtractionMethod) == 3
+    def test_only_context_method_defined(self) -> None:
+        assert list(ExtractionMethod) == [ExtractionMethod.AQL_WITH_CONTEXT]
 
 
 # ---------------------------------------------------------------------------
@@ -102,43 +63,21 @@ class TestExtractionMethod:
 
 
 class TestQueryConstants:
-    @pytest.mark.parametrize(
-        "name,query",
-        [
-            ("BASIC", JOB_DESCRIPTION_QUERY),
-            ("WITH_CONTEXT", JOB_DESCRIPTION_QUERY_WITH_CONTEXT),
-        ],
-    )
-    def test_has_braces(self, name: str, query: str) -> None:
-        assert "{" in query, f"{name}: missing opening brace"
-        assert "}" in query, f"{name}: missing closing brace"
+    def test_has_braces(self) -> None:
+        assert "{" in JOB_DESCRIPTION_QUERY_WITH_CONTEXT
+        assert "}" in JOB_DESCRIPTION_QUERY_WITH_CONTEXT
 
-    @pytest.mark.parametrize(
-        "name,query",
-        [
-            ("BASIC", JOB_DESCRIPTION_QUERY),
-            ("WITH_CONTEXT", JOB_DESCRIPTION_QUERY_WITH_CONTEXT),
-        ],
-    )
-    def test_balanced_braces(self, name: str, query: str) -> None:
-        assert query.count("{") == query.count("}"), (
-            f"{name}: unbalanced braces"
-        )
+    def test_balanced_braces(self) -> None:
+        assert JOB_DESCRIPTION_QUERY_WITH_CONTEXT.count(
+            "{"
+        ) == JOB_DESCRIPTION_QUERY_WITH_CONTEXT.count("}")
 
-    @pytest.mark.parametrize(
-        "name,query",
-        [
-            ("BASIC", JOB_DESCRIPTION_QUERY),
-            ("WITH_CONTEXT", JOB_DESCRIPTION_QUERY_WITH_CONTEXT),
-        ],
-    )
-    def test_no_multiline_semantic_context(
-        self, name: str, query: str
-    ) -> None:
-        matches = re.findall(r"\([^)]*\n[^)]*\)", query)
-        assert matches == [], (
-            f"{name}: multi-line semantic context found: {matches}"
+    def test_no_multiline_semantic_context(self) -> None:
+        matches = re.findall(
+            r"\([^)]*\n[^)]*\)",
+            JOB_DESCRIPTION_QUERY_WITH_CONTEXT,
         )
+        assert matches == []
 
     def test_context_query_has_semantic_hints(self) -> None:
         for hint in [
@@ -155,10 +94,6 @@ class TestQueryConstants:
 
     def test_context_query_has_structural_nesting(self) -> None:
         assert "job_description_section" in JOB_DESCRIPTION_QUERY_WITH_CONTEXT
-
-    def test_prompt_is_non_empty_string(self) -> None:
-        assert isinstance(JOB_DESCRIPTION_PROMPT, str)
-        assert len(JOB_DESCRIPTION_PROMPT) > 20
 
 
 # ---------------------------------------------------------------------------
@@ -183,8 +118,7 @@ class TestFlattenContextResponse:
         flat = _flatten_context_response(raw_context_response)
         assert flat["job_title"] == "Staff Engineer"
         assert flat["company_name"] == "Acme Corp"
-        assert flat["employment_type"] == "Full-time"
-        assert flat["salary_range"] == "120k-160k"
+        assert flat["job_location"] == "Remote"
 
     def test_missing_section_returns_none_for_nested(self) -> None:
         flat = _flatten_context_response({"job_title": "PM"})
@@ -220,30 +154,7 @@ class TestParseAqlResponse:
         assert extract.job_title == "Staff Engineer"
         assert extract.job_summary == "Build great things."
         assert extract.responsibilities == ["Design systems", "Review code"]
-        assert extract.populated_fields == 11
-
-    def test_aql_structured_flat_result(
-        self, raw_flat_response: dict
-    ) -> None:
-        extract = _parse_aql_response(
-            raw_flat_response,
-            "https://example.com/job2",
-            ExtractionMethod.AQL_STRUCTURED,
-        )
-        assert extract.job_title == "Backend Engineer"
-        assert extract.populated_fields == 5
-
-    def test_prompt_experimental_flat_result(self) -> None:
-        raw = {
-            "job_title": "PM",
-            "responsibilities": ["Define roadmap"],
-        }
-        extract = _parse_aql_response(
-            raw, "https://x.com", ExtractionMethod.PROMPT_EXPERIMENTAL
-        )
-        assert extract.job_title == "PM"
-        assert extract.responsibilities == ["Define roadmap"]
-        assert extract.populated_fields == 2
+        assert extract.populated_fields == 8
 
     def test_aql_with_context_missing_section_graceful(self) -> None:
         extract = _parse_aql_response(
@@ -261,15 +172,15 @@ class TestParseAqlResponse:
             "requirements": None,
         }
         extract = _parse_aql_response(
-            raw, "https://x.com", ExtractionMethod.AQL_STRUCTURED
+            raw, "https://x.com", ExtractionMethod.AQL_WITH_CONTEXT
         )
         assert extract.responsibilities == []
         assert extract.requirements == []
 
-    def test_url_and_method_stamped(self, raw_flat_response: dict) -> None:
+    def test_url_and_method_stamped(self, raw_context_response: dict) -> None:
         url = "https://example.com/job"
-        method = ExtractionMethod.AQL_STRUCTURED
-        extract = _parse_aql_response(raw_flat_response, url, method)
+        method = ExtractionMethod.AQL_WITH_CONTEXT
+        extract = _parse_aql_response(raw_context_response, url, method)
         assert extract.url == url
         assert extract.method == method
 
@@ -281,32 +192,28 @@ class TestParseAqlResponse:
 
 class TestCountPopulatedFields:
     def test_all_empty(self) -> None:
-        j = JobExtract(url="x", method=ExtractionMethod.AQL_STRUCTURED)
+        j = JobExtract(url="x", method=ExtractionMethod.AQL_WITH_CONTEXT)
         assert _count_populated_fields(j) == 0
 
     def test_all_populated(self) -> None:
         j = JobExtract(
             url="x",
-            method=ExtractionMethod.AQL_STRUCTURED,
+            method=ExtractionMethod.AQL_WITH_CONTEXT,
             job_title="T",
             company_name="C",
             job_location="L",
-            employment_type="FT",
-            salary_range="100k",
             job_summary="S",
             responsibilities=["R"],
             requirements=["Q"],
             preferred_qualifications=["P"],
             benefits=["B"],
-            application_deadline="2026-12-01",
-            remote_policy="Remote",
         )
-        assert _count_populated_fields(j) == 12
+        assert _count_populated_fields(j) == 8
 
     def test_partial(self) -> None:
         j = JobExtract(
             url="x",
-            method=ExtractionMethod.AQL_STRUCTURED,
+            method=ExtractionMethod.AQL_WITH_CONTEXT,
             job_title="T",
             company_name="C",
         )
@@ -344,7 +251,7 @@ class TestScraperError:
 class TestJobExtractDefaults:
     def test_defaults(self) -> None:
         j = JobExtract(
-            url="https://x.com", method=ExtractionMethod.AQL_STRUCTURED
+            url="https://x.com", method=ExtractionMethod.AQL_WITH_CONTEXT
         )
         assert j.has_error is False
         assert j.responsibilities == []
@@ -355,23 +262,19 @@ class TestJobExtractDefaults:
         assert j.scrape_time_ms == 0
         assert j.error_message is None
 
-    def test_content_fields_covers_12(self) -> None:
-        assert len(JobExtract.CONTENT_FIELDS) == 12
+    def test_content_fields_covers_8(self) -> None:
+        assert len(JobExtract.CONTENT_FIELDS) == 8
 
     def test_content_fields_match_expected_set(self) -> None:
         expected = {
             "job_title",
             "company_name",
             "job_location",
-            "employment_type",
-            "salary_range",
             "job_summary",
             "responsibilities",
             "requirements",
             "preferred_qualifications",
             "benefits",
-            "application_deadline",
-            "remote_policy",
         }
         assert set(JobExtract.CONTENT_FIELDS) == expected
 
@@ -382,38 +285,15 @@ class TestJobExtractDefaults:
 
 
 class TestConcreteStrategies:
-    @pytest.mark.parametrize(
-        "strategy_cls, expected_method",
-        [
-            (AqlStructuredStrategy, ExtractionMethod.AQL_STRUCTURED),
-            (AqlWithContextStrategy, ExtractionMethod.AQL_WITH_CONTEXT),
-            (
-                PromptExperimentalStrategy,
-                ExtractionMethod.PROMPT_EXPERIMENTAL,
-            ),
-        ],
-    )
-    def test_method_name(self, strategy_cls, expected_method) -> None:
-        assert strategy_cls().method_name == expected_method
+    def test_method_name(self) -> None:
+        assert (
+            AqlWithContextStrategy().method_name
+            == ExtractionMethod.AQL_WITH_CONTEXT
+        )
 
-    @pytest.mark.parametrize(
-        "strategy_cls",
-        [
-            AqlStructuredStrategy,
-            AqlWithContextStrategy,
-            PromptExperimentalStrategy,
-        ],
-    )
-    def test_description_is_non_empty_string(self, strategy_cls) -> None:
-        desc = strategy_cls().description
+    def test_description_is_non_empty_string(self) -> None:
+        desc = AqlWithContextStrategy().description
         assert isinstance(desc, str) and len(desc) > 5
-
-    def test_aql_structured_calls_query_data(self) -> None:
-        page = MagicMock()
-        page.query_data.return_value = {"job_title": "Eng"}
-        result = AqlStructuredStrategy().execute(page)
-        page.query_data.assert_called_once_with(JOB_DESCRIPTION_QUERY)
-        assert result == {"job_title": "Eng"}
 
     def test_aql_with_context_calls_query_data(self) -> None:
         page = MagicMock()
@@ -424,17 +304,6 @@ class TestConcreteStrategies:
         )
         assert result == {"job_title": "Eng"}
 
-    def test_prompt_experimental_calls_get_data_by_prompt(self) -> None:
-        page = MagicMock()
-        page.get_data_by_prompt_experimental.return_value = {
-            "job_title": "PM"
-        }
-        result = PromptExperimentalStrategy().execute(page)
-        page.get_data_by_prompt_experimental.assert_called_once_with(
-            JOB_DESCRIPTION_PROMPT
-        )
-        assert result == {"job_title": "PM"}
-
 
 # ---------------------------------------------------------------------------
 # AgentQlJobScraper
@@ -443,13 +312,13 @@ class TestConcreteStrategies:
 
 class TestAgentQlJobScraper:
     def test_strategy_property(self) -> None:
-        strategy = AqlStructuredStrategy()
+        strategy = AqlWithContextStrategy()
         scraper = AgentQlJobScraper(MagicMock(), strategy)
         assert scraper.strategy is strategy
 
     def test_scrape_delegates_to_strategy(self) -> None:
         strategy = MagicMock()
-        strategy.method_name = ExtractionMethod.AQL_STRUCTURED
+        strategy.method_name = ExtractionMethod.AQL_WITH_CONTEXT
         strategy.execute.return_value = {"job_title": "Eng"}
 
         mock_page = MagicMock()
@@ -467,11 +336,11 @@ class TestAgentQlJobScraper:
 
         strategy.execute.assert_called_once_with(mock_page)
         assert result.job_title == "Eng"
-        assert result.method == ExtractionMethod.AQL_STRUCTURED
+        assert result.method == ExtractionMethod.AQL_WITH_CONTEXT
 
     def test_scrape_closes_page_on_success(self) -> None:
         strategy = MagicMock()
-        strategy.method_name = ExtractionMethod.AQL_STRUCTURED
+        strategy.method_name = ExtractionMethod.AQL_WITH_CONTEXT
         strategy.execute.return_value = {}
 
         mock_page = MagicMock()
@@ -492,7 +361,7 @@ class TestAgentQlJobScraper:
 
     def test_scrape_closes_page_on_error(self) -> None:
         strategy = MagicMock()
-        strategy.method_name = ExtractionMethod.AQL_STRUCTURED
+        strategy.method_name = ExtractionMethod.AQL_WITH_CONTEXT
         strategy.execute.side_effect = RuntimeError("boom")
 
         mock_page = MagicMock()

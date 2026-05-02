@@ -46,16 +46,12 @@ def full_extract() -> JobExtract:
         job_title="Staff Engineer",
         company_name="Acme Corp",
         job_location="London, UK",
-        employment_type="Full-time",
-        salary_range="£80k–£110k",
         job_summary="Build scalable systems.",
         responsibilities=["Design APIs", "Mentor juniors"],
         requirements=["5 years Python"],
         preferred_qualifications=["PhD"],
         benefits=["Health", "Pension"],
-        application_deadline="2026-12-01",
-        remote_policy="Hybrid",
-        populated_fields=12,
+        populated_fields=8,
         scrape_time_ms=3_200,
     )
 
@@ -65,7 +61,7 @@ def failed_extract() -> JobExtract:
     """A ``JobExtract`` that represents a scrape failure."""
     return JobExtract(
         url="https://lever.co/job/99",
-        method=ExtractionMethod.AQL_STRUCTURED,
+        method=ExtractionMethod.AQL_WITH_CONTEXT,
         has_error=True,
         error_message="Navigation failed: timeout",
     )
@@ -89,7 +85,7 @@ def sample_report(
             ),
             ExperimentResult(
                 url=failed_extract.url,
-                method=ExtractionMethod.AQL_STRUCTURED,
+                method=ExtractionMethod.AQL_WITH_CONTEXT,
                 extract=failed_extract,
                 is_success=False,
                 error_message="Navigation failed: timeout",
@@ -143,16 +139,12 @@ class TestRenderFieldTable:
         table = _render_field_table(full_extract)
         assert "|---|---|" in table
 
-    def test_all_12_fields_present(self, full_extract: JobExtract) -> None:
+    def test_all_8_fields_present(self, full_extract: JobExtract) -> None:
         table = _render_field_table(full_extract)
         for label in [
             "Job Title",
             "Company",
             "Location",
-            "Employment Type",
-            "Salary Range",
-            "Remote Policy",
-            "Application Deadline",
             "Job Summary",
             "Responsibilities",
             "Requirements",
@@ -168,7 +160,7 @@ class TestRenderFieldTable:
 
     def test_missing_value_shows_not_found(self) -> None:
         sparse = JobExtract(
-            url="x", method=ExtractionMethod.AQL_STRUCTURED
+            url="x", method=ExtractionMethod.AQL_WITH_CONTEXT
         )
         table = _render_field_table(sparse)
         assert "_not found_" in table
@@ -224,7 +216,7 @@ class TestBuildMarkdownReport:
         self, sample_report: ExperimentReport
     ) -> None:
         md = build_markdown_report(sample_report)
-        assert "12 / 12" in md
+        assert "8 / 8" in md
 
     def test_successful_result_shows_scrape_time(
         self, sample_report: ExperimentReport

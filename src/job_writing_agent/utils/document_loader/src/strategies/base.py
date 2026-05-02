@@ -1,13 +1,9 @@
-"""Abstract base class for all AgentQL job-description scraper strategies.
+"""Abstract base class for AgentQL job-description scraper strategies.
 
-Every concrete strategy encapsulates exactly one extraction approach: the
-query or prompt constant it owns, and the single AgentQL API call needed to
-produce a raw ``dict``.  The caller (``AgentQlJobScraper``) is completely
-decoupled from which strategy is in use — it only calls ``execute()``.
-
-Adding a new strategy requires only a new file that subclasses
-``BaseScraperStrategy``; no changes to the scraper or experiment runner are
-necessary.
+The active strategy encapsulates one extraction approach: the query constant
+it owns and the single AgentQL API call needed to produce a raw ``dict``. The
+caller (``AgentQlJobScraper``) is decoupled from those details and only calls
+``execute()``.
 """
 
 from __future__ import annotations
@@ -24,11 +20,11 @@ if TYPE_CHECKING:
 
 
 class BaseScraperStrategy(ABC):
-    """Contract that every extraction strategy must fulfil.
+    """Contract that an extraction strategy must fulfil.
 
-    Subclasses own their query/prompt constant and the single AgentQL call.
-    They must not manage page navigation or lifecycle — that responsibility
-    belongs to ``AgentQlJobScraper``.
+    Subclasses own their query constant and the single AgentQL call. They must
+    not manage page navigation or lifecycle — that responsibility belongs to
+    ``AgentQlJobScraper``.
 
     Example:
         >>> strategy = AqlWithContextStrategy()
@@ -65,9 +61,8 @@ class BaseScraperStrategy(ABC):
             page: AgentQL-wrapped Playwright ``Page`` at the target URL.
 
         Returns:
-            Raw ``dict`` returned by AgentQL.  Shape varies by strategy:
-            ``body[]`` wrappers for AQL strategies, and free-form keys for
-            ``PROMPT_EXPERIMENTAL``.
+            Raw ``dict`` returned by AgentQL, usually with a top-level
+            ``body[]`` wrapper for the AQL response.
 
         Raises:
             Exception: Any exception from the AgentQL SDK is propagated as-is

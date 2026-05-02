@@ -1,12 +1,6 @@
 r"""AgentQL job-description scraper experiment.
 
-Runs three extraction strategies on 10 diverse job-posting URLs (30 trials):
-
-* Strategy A — ``AqlStructuredStrategy``: bare AQL query, field names only
-* Strategy B — ``AqlWithContextStrategy``: AQL query enriched with semantic
-  context and structural nesting (AgentQL best-practice approach)
-* Strategy C — ``PromptExperimentalStrategy``: free-form NL prompt via
-  ``get_data_by_prompt_experimental()``
+Runs the context-enriched AQL extraction strategy on diverse job-posting URLs.
 
 Usage (PowerShell)::
 
@@ -48,10 +42,8 @@ from job_writing_agent.utils.document_loader.src.results import (
     save_markdown_report,
 )
 from job_writing_agent.utils.document_loader.src.strategies import (
-    AqlStructuredStrategy,
     AqlWithContextStrategy,
     BaseScraperStrategy,
-    PromptExperimentalStrategy,
 )
 
 RESULTS_DIR: Path = Path(__file__).parent / "experiment_results"
@@ -326,7 +318,7 @@ def _print_summary_table(report: ExperimentReport) -> None:
 
 @log_execution
 def run_experiment(job_urls: list[str]) -> ExperimentReport:
-    """Run all three strategies against every URL.
+    """Run the context-enriched AQL strategy against every URL.
 
     Launches a single headless Chromium instance shared across all trials.
     Each trial opens and closes its own page tab.
@@ -339,9 +331,7 @@ def run_experiment(job_urls: list[str]) -> ExperimentReport:
     """
     run_id = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S")
     strategies: list[BaseScraperStrategy] = [
-        AqlStructuredStrategy(),
         AqlWithContextStrategy(),
-        PromptExperimentalStrategy(),
     ]
     total_trials = len(job_urls) * len(strategies)
     results: list[ExperimentResult] = []

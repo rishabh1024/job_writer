@@ -17,11 +17,9 @@ Data models
 ``ExtractionMethod`` -- StrEnum identifying each strategy variant (re-exported
                         from ``_constants`` for backward compatibility)
 
-Query / prompt constants (re-exported from ``_constants``)
-----------------------------------------------------------
-``JOB_DESCRIPTION_QUERY``              -- bare AQL query (no context)
+Query constant (re-exported from ``_constants``)
+------------------------------------------------
 ``JOB_DESCRIPTION_QUERY_WITH_CONTEXT`` -- AQL + semantic / structural context
-``JOB_DESCRIPTION_PROMPT``             -- free-form NL prompt
 """
 
 from __future__ import annotations
@@ -35,15 +33,11 @@ import agentql
 from job_writing_agent.utils.app_log.logging_config import get_logger
 from job_writing_agent.utils.app_log.logging_decorators import log_execution
 from job_writing_agent.utils.document_loader.src._constants import (
-    JOB_DESCRIPTION_PROMPT,
-    JOB_DESCRIPTION_QUERY,
     JOB_DESCRIPTION_QUERY_WITH_CONTEXT,
     ExtractionMethod,
 )
 from job_writing_agent.utils.document_loader.src.strategies import (
-    AqlStructuredStrategy,
     AqlWithContextStrategy,
-    PromptExperimentalStrategy,
 )
 
 if TYPE_CHECKING:
@@ -56,8 +50,6 @@ if TYPE_CHECKING:
 
 # Re-export constants so existing callers keep working.
 __all__ = [
-    "JOB_DESCRIPTION_PROMPT",
-    "JOB_DESCRIPTION_QUERY",
     "JOB_DESCRIPTION_QUERY_WITH_CONTEXT",
     "AgentQlJobScraper",
     "ExtractionMethod",
@@ -211,8 +203,8 @@ def _unwrap_body_response(raw: dict) -> dict:
 def _flatten_context_response(agentql_response: dict) -> dict:
     """Hoist nested ``job_description_section`` fields up to the top level.
 
-    ``JOB_DESCRIPTION_QUERY_WITH_CONTEXT`` may return a top-level ``body``
-    wrapper and nests ``job_summary``,
+    The context query may return a top-level ``body`` wrapper and nests
+    ``job_summary``,
     ``responsibilities``, ``requirements``, ``preferred_qualifications``, and
     ``benefits`` inside a ``job_description_section`` container.  This helper
     merges those fields back into a flat dict so ``_parse_aql_response`` can
@@ -251,12 +243,10 @@ def _parse_aql_response(
 ) -> JobExtract:
     """Convert an AgentQL response dict into a ``JobExtract``.
 
-    Handles both flat (``AQL_STRUCTURED`` / ``PROMPT_EXPERIMENTAL``) and
-    nested (``AQL_WITH_CONTEXT``) response shapes transparently.
+    Handles the nested ``AQL_WITH_CONTEXT`` response shape.
 
     Args:
-        agentql_response: Dictionary returned by ``page.query_data()`` or
-            ``page.get_data_by_prompt_experimental()``.
+        agentql_response: Dictionary returned by ``page.query_data()``.
         url: Source URL (stored in the result for traceability).
         method: Extraction method tag to stamp on the result.
 
@@ -265,11 +255,7 @@ def _parse_aql_response(
     """
     logger.debug("AgentQL response for %s: %s", url, agentql_response)
 
-    flat = (
-        _flatten_context_response(agentql_response)
-        if method == ExtractionMethod.AQL_WITH_CONTEXT
-        else _unwrap_body_response(agentql_response)
-    )
+    flat = _flatten_context_response(agentql_response)
 
     extract = JobExtract(
         url=url,
@@ -429,9 +415,7 @@ class AgentQlJobScraper:
 
 
 _STRATEGY_MAP = {
-    ExtractionMethod.AQL_STRUCTURED: AqlStructuredStrategy,
     ExtractionMethod.AQL_WITH_CONTEXT: AqlWithContextStrategy,
-    ExtractionMethod.PROMPT_EXPERIMENTAL: PromptExperimentalStrategy,
 }
 
 
@@ -439,7 +423,7 @@ _STRATEGY_MAP = {
 def extract_job_data(
     browser: Browser,
     url: str,
-    method: ExtractionMethod = ExtractionMethod.AQL_STRUCTURED,
+    method: ExtractionMethod = ExtractionMethod.AQL_WITH_CONTEXT,
 ) -> JobExtract:
     """Extract job-description data using the given ``ExtractionMethod``.
 
@@ -453,8 +437,8 @@ def extract_job_data(
     Args:
         browser: An already-launched Playwright ``Browser`` instance.
         url: Publicly accessible URL of the job posting.
-        method: Extraction strategy to use.  Defaults to
-            ``ExtractionMethod.AQL_STRUCTURED``.
+        method: Extraction strategy to use. Defaults to
+            ``ExtractionMethod.AQL_WITH_CONTEXT``.
 
     Returns:
         A ``JobExtract`` dataclass with all discovered fields populated.
