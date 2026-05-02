@@ -10,9 +10,18 @@ import os
 
 # Third-party library imports
 from langchain_core.documents import Document
-from langchain_community.vectorstores import Pinecone
 from langchain_ollama import OllamaEmbeddings
-from pinecone import Pinecone as PineconeClient, ServerlessSpec
+
+try:
+    from langchain_community.vectorstores import Pinecone
+    from pinecone import Pinecone as PineconeClient, ServerlessSpec
+
+    _PINECONE_AVAILABLE = True
+except ImportError:
+    _PINECONE_AVAILABLE = False
+    Pinecone = None  # type: ignore[assignment,misc]
+    PineconeClient = None  # type: ignore[assignment,misc]
+    ServerlessSpec = None  # type: ignore[assignment,misc]
 
 # Default configuration
 DEFAULT_PINECONE_INDEX = "job-writer-vector"
@@ -32,7 +41,15 @@ class VectorStoreManager:
             api_key: Pinecone API key (will use env var if not provided)
             index_name: Name of the Pinecone index to use
             embedding_model: Name of the Ollama model to use for embeddings
+
+        Raises:
+            ImportError: If the ``vector-store`` optional extra is not installed.
         """
+        if not _PINECONE_AVAILABLE:
+            raise ImportError(
+                "Pinecone is not installed. "
+                "Install it with: pip install 'job_writing_agent[vector-store]'"
+            )
         api_key = os.getenv("PINECONE_API_KEY")
         if not api_key:
             raise ValueError("Environment variable PINECONE_API_KEY not set.")
