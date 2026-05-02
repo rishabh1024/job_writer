@@ -1,9 +1,25 @@
 """AgentQL-powered job description scraper.
 
-This module provides a single public function, ``extract_job_data``, that uses
-the AgentQL Playwright SDK to extract structured job-description fields from any
-public job-posting URL.  It raises typed exceptions on failure so the caller can
-decide how to handle errors gracefully.
+Public API
+----------
+``AgentQlJobScraper``
+    Class that accepts any ``BaseScraperStrategy``, manages page lifecycle,
+    and returns a ``JobExtract``.  Preferred entry point.
+
+``extract_job_data``
+    Backward-compatible function shim retained for existing callers and tests.
+
+Data models
+-----------
+``JobExtract``    — structured extraction result dataclass
+``ScraperError``  — typed exception raised on navigation / extraction failure
+``ExtractionMethod`` — StrEnum identifying each strategy variant
+
+Query / prompt constants
+------------------------
+``JOB_DESCRIPTION_QUERY``              — bare AQL query (no context)
+``JOB_DESCRIPTION_QUERY_WITH_CONTEXT`` — AQL query with semantic + structural context
+``JOB_DESCRIPTION_PROMPT``             — free-form NL prompt
 """
 
 from __future__ import annotations
@@ -11,7 +27,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import agentql
 from agentql.ext.playwright.sync_api import Page
@@ -19,6 +35,11 @@ from playwright.sync_api import Browser
 
 from job_writing_agent.utils.app_log.logging_config import get_logger
 from job_writing_agent.utils.app_log.logging_decorators import log_execution
+
+if TYPE_CHECKING:
+    from job_writing_agent.utils.document_loader.src.strategies.base import (
+        BaseScraperStrategy,
+    )
 
 logger = get_logger(__name__)
 
@@ -31,8 +52,8 @@ SLOW_RESPONSE_THRESHOLD_S: float = 15.0
 
 # ---------------------------------------------------------------------------
 # Bare AQL query — field names only, no context hints.
-# Used as the Method A baseline so results can be compared against the
-# context-enriched variant below.
+# Kept here (not in the strategy file) so tests and the function shim can
+# import it without importing the strategy sub-package.
 # ---------------------------------------------------------------------------
 JOB_DESCRIPTION_QUERY: str = """
 {
@@ -52,17 +73,10 @@ JOB_DESCRIPTION_QUERY: str = """
 """
 
 # ---------------------------------------------------------------------------
-# Context-enriched AQL query — applies both AgentQL best practices:
-#
-#   1. Semantic context: parentheses descriptions on every field guide AgentQL
-#      to the correct element when multiple candidates share similar text.
-#      e.g.  job_title(the h1 or prominent heading naming the role)
-#
-#   2. Structural context: list fields that belong to the same prose section
-#      are nested under a job_description_section container, mirroring the
-#      typical DOM hierarchy of a job-posting page and reducing ambiguity
-#      with unrelated lists (nav links, footer items, etc.).
-#
+# Context-enriched AQL query.
+# Applies both AgentQL best practices:
+#   1. Semantic context — parentheses descriptions on every field
+#   2. Structural context — list fields nested under job_description_section
 # Reference: https://docs.agentql.com/agentql-query/best-practices
 # ---------------------------------------------------------------------------
 JOB_DESCRIPTION_QUERY_WITH_CONTEXT: str = """
@@ -186,7 +200,6 @@ class JobExtract:
     has_error: bool = False
     error_message: Optional[str] = None
 
-    # Total content fields checked by ``_count_populated_fields``
     _CONTENT_FIELDS: tuple[str, ...] = field(
         default=(
             "job_title",
@@ -266,7 +279,7 @@ def _flatten_context_response(raw: dict) -> dict:
 def _parse_aql_response(
     raw: dict, url: str, method: ExtractionMethod
 ) -> JobExtract:
-    """Convert a raw AgentQL ``query_data`` dict into a ``JobExtract``.
+    """Convert a raw AgentQL response dict into a ``JobExtract``.
 
     Handles both flat (``AQL_STRUCTURED`` / ``PROMPT_EXPERIMENTAL``) and
     nested (``AQL_WITH_CONTEXT``) response shapes transparently.
@@ -341,7 +354,9 @@ def _warn_if_partial(extract: JobExtract, total_fields: int) -> None:
         )
 
 
-def _warn_if_slow(elapsed_s: float, url: str, method: ExtractionMethod) -> None:
+def _warn_if_slow(
+    elapsed_s: float, url: str, method: ExtractionMethod
+) -> None:
     """Emit a WARNING when a scrape exceeds the slow-response threshold.
 
     Args:
@@ -360,7 +375,100 @@ def _warn_if_slow(elapsed_s: float, url: str, method: ExtractionMethod) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Public API
+# AgentQlJobScraper — strategy-pattern entry point
+# ---------------------------------------------------------------------------
+
+
+class AgentQlJobScraper:
+    """Scrapes a job-posting URL using an interchangeable extraction strategy.
+
+    Decouples page lifecycle management (navigation, timeout, page close) from
+    the extraction logic, which is entirely owned by the injected
+    ``BaseScraperStrategy``.  Swap the strategy without changing this class.
+
+    Example:
+        >>> from strategies import AqlWithContextStrategy
+        >>> scraper = AgentQlJobScraper(browser, AqlWithContextStrategy())
+        >>> result = scraper.scrape("https://example.com/job/123")
+
+    Args:
+        browser: An already-launched Playwright ``Browser`` instance.
+        strategy: Concrete ``BaseScraperStrategy`` to use for extraction.
+    """
+
+    def __init__(
+        self, browser: Browser, strategy: BaseScraperStrategy
+    ) -> None:
+        self._browser = browser
+        self._strategy = strategy
+
+    @property
+    def strategy(self) -> BaseScraperStrategy:
+        """The currently active extraction strategy.
+
+        Returns:
+            The ``BaseScraperStrategy`` instance injected at construction.
+        """
+        return self._strategy
+
+    @log_execution
+    def scrape(self, url: str) -> JobExtract:
+        """Extract job-description data from ``url`` using the active strategy.
+
+        Opens a new browser tab, navigates to ``url``, delegates extraction to
+        ``self._strategy.execute()``, then closes the tab.  The tab is always
+        closed in a ``finally`` block regardless of success or failure.
+
+        Args:
+            url: Publicly accessible job-posting URL.
+
+        Returns:
+            A ``JobExtract`` with all discovered fields populated.
+
+        Raises:
+            ScraperError: If navigation fails or the strategy raises an
+                unexpected exception.
+        """
+        method = self._strategy.method_name
+        logger.info(
+            "Starting extraction: url=%s strategy=%s", url, method
+        )
+        start_time = time.monotonic()
+
+        page: Page = agentql.wrap(self._browser.new_page())
+        try:
+            _navigate_to_url(page, url)
+            raw: dict = self._strategy.execute(page)
+
+            elapsed_s = time.monotonic() - start_time
+            extract = _parse_aql_response(raw, url, method)
+            extract.scrape_time_ms = int(elapsed_s * 1_000)
+
+            _warn_if_slow(elapsed_s, url, method)
+            _warn_if_partial(extract, len(extract._CONTENT_FIELDS))
+
+            logger.info(
+                "Extraction complete: url=%s strategy=%s "
+                "fields=%d/%d time=%dms",
+                url,
+                method,
+                extract.populated_fields,
+                len(extract._CONTENT_FIELDS),
+                extract.scrape_time_ms,
+            )
+            return extract
+
+        except ScraperError:
+            raise
+        except Exception as exc:
+            elapsed_s = time.monotonic() - start_time
+            raise ScraperError(url, str(exc)) from exc
+        finally:
+            page.close()
+
+
+# ---------------------------------------------------------------------------
+# Backward-compatible function shim
 # ---------------------------------------------------------------------------
 
 
@@ -370,11 +478,14 @@ def extract_job_data(
     url: str,
     method: ExtractionMethod = ExtractionMethod.AQL_STRUCTURED,
 ) -> JobExtract:
-    """Extract structured job-description data from a public job posting URL.
+    """Extract job-description data using the given ``ExtractionMethod``.
 
-    Opens a new browser page, navigates to ``url``, and calls
-    ``page.query_data()`` using the appropriate AgentQL strategy.  The page is
-    always closed after extraction regardless of success or failure.
+    This function is a thin shim around ``AgentQlJobScraper`` that maps the
+    ``ExtractionMethod`` enum to the appropriate strategy class.  It exists
+    for backward compatibility with existing callers and tests.
+
+    Prefer instantiating ``AgentQlJobScraper`` directly with an explicit
+    strategy for new code.
 
     Args:
         browser: An already-launched Playwright ``Browser`` instance.
@@ -388,46 +499,23 @@ def extract_job_data(
     Raises:
         ScraperError: If navigation fails or AgentQL raises an unexpected
             exception during data extraction.
+        ValueError: If ``method`` is not a recognised ``ExtractionMethod``.
     """
-    logger.info("Starting extraction: url=%s method=%s", url, method)
-    start_time = time.monotonic()
+    from job_writing_agent.utils.document_loader.src.strategies import (
+        AqlStructuredStrategy,
+        AqlWithContextStrategy,
+        PromptExperimentalStrategy,
+    )
 
-    page: Page = agentql.wrap(browser.new_page())
-    try:
-        _navigate_to_url(page, url)
+    strategy_map = {
+        ExtractionMethod.AQL_STRUCTURED: AqlStructuredStrategy,
+        ExtractionMethod.AQL_WITH_CONTEXT: AqlWithContextStrategy,
+        ExtractionMethod.PROMPT_EXPERIMENTAL: PromptExperimentalStrategy,
+    }
 
-        if method == ExtractionMethod.AQL_STRUCTURED:
-            raw: dict = page.query_data(JOB_DESCRIPTION_QUERY)
-        elif method == ExtractionMethod.AQL_WITH_CONTEXT:
-            raw = page.query_data(JOB_DESCRIPTION_QUERY_WITH_CONTEXT)
-        else:
-            # PROMPT_EXPERIMENTAL uses a separate AgentQL inference path
-            # that accepts free-form natural language instead of an AQL query.
-            raw = page.get_data_by_prompt_experimental(
-                JOB_DESCRIPTION_PROMPT
-            )
+    strategy_cls = strategy_map.get(method)
+    if strategy_cls is None:
+        raise ValueError(f"Unrecognised ExtractionMethod: {method!r}")
 
-        elapsed_s = time.monotonic() - start_time
-        extract = _parse_aql_response(raw, url, method)
-        extract.scrape_time_ms = int(elapsed_s * 1_000)
-
-        _warn_if_slow(elapsed_s, url, method)
-        _warn_if_partial(extract, len(extract._CONTENT_FIELDS))
-
-        logger.info(
-            "Extraction complete: url=%s method=%s fields=%d/%d time=%dms",
-            url,
-            method,
-            extract.populated_fields,
-            len(extract._CONTENT_FIELDS),
-            extract.scrape_time_ms,
-        )
-        return extract
-
-    except ScraperError:
-        raise
-    except Exception as exc:
-        elapsed_s = time.monotonic() - start_time
-        raise ScraperError(url, str(exc)) from exc
-    finally:
-        page.close()
+    scraper = AgentQlJobScraper(browser, strategy_cls())
+    return scraper.scrape(url)

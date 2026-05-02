@@ -1,36 +1,32 @@
 """AgentQL job-description scraper experiment.
 
-Runs three extraction methods on 10 diverse job-posting URLs (30 trials):
+Runs three extraction strategies on 10 diverse job-posting URLs (30 trials):
 
-* Method A — ``AQL_STRUCTURED``: bare AQL query, field names only (baseline)
-* Method B — ``AQL_WITH_CONTEXT``: AQL query enriched with semantic context
-  descriptions ``(...)`` per field and structural nesting for the main
-  description section (AgentQL best-practice approach)
-* Method C — ``PROMPT_EXPERIMENTAL``: free-form natural language prompt passed
-  to ``get_data_by_prompt_experimental()``
-
-Results are persisted to JSON and a comparison table is printed to the console.
+* Strategy A — ``AqlStructuredStrategy``: bare AQL query, field names only
+* Strategy B — ``AqlWithContextStrategy``: AQL query enriched with semantic
+  context and structural nesting (AgentQL best-practice approach)
+* Strategy C — ``PromptExperimentalStrategy``: free-form NL prompt via
+  ``get_data_by_prompt_experimental()``
 
 Usage (PowerShell)::
 
     cd src\\job_writing_agent\\utils\\document_loader\\src
     python scraper_experiment.py
 
-Output files are written to the ``experiment_results/`` directory alongside
-this script:
+Output files are written to the ``experiment_results/`` directory:
 
-* ``results_<timestamp>.json``   — full structured extraction data per URL
-* ``experiment_<timestamp>.log`` — timestamped log of every scrape event
+* ``results_<timestamp>.json``    — full structured extraction data
+* ``report_<timestamp>.md``       — human-readable per-URL per-strategy report
+* ``experiment_<timestamp>.log``  — timestamped log of every scrape event
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from playwright.sync_api import sync_playwright
 
@@ -40,10 +36,22 @@ from job_writing_agent.utils.app_log.logging_config import (
 )
 from job_writing_agent.utils.app_log.logging_decorators import log_execution
 from job_writing_agent.utils.document_loader.src.agentql_job_scraper import (
-    ExtractionMethod,
+    AgentQlJobScraper,
     JobExtract,
     ScraperError,
-    extract_job_data,
+)
+from job_writing_agent.utils.document_loader.src.experiment_models import (
+    ExperimentReport,
+    ExperimentResult,
+)
+from job_writing_agent.utils.document_loader.src.results import (
+    save_markdown_report,
+)
+from job_writing_agent.utils.document_loader.src.strategies import (
+    AqlStructuredStrategy,
+    AqlWithContextStrategy,
+    BaseScraperStrategy,
+    PromptExperimentalStrategy,
 )
 
 # ---------------------------------------------------------------------------
@@ -59,7 +67,7 @@ JOB_URLS: list[str] = [
     "https://job-boards.greenhouse.io/ocrolusinc/jobs/5837904004",
     # Lever
     "https://jobs.lever.co/openai/a1b2c3d4-0001-0001-0001-000000000001",
-    # Workday
+    # Workday / Amazon Jobs
     (
         "https://amazon.jobs/en/jobs/2972591/"
         "software-development-engineer"
@@ -73,75 +81,33 @@ JOB_URLS: list[str] = [
         "https://jobs.smartrecruiters.com/Salesforce/"
         "software-engineer-backend"
     ),
-    # Direct company career page — Microsoft
+    # Microsoft careers
     (
         "https://careers.microsoft.com/us/en/job/1797500/"
         "Software-Engineer"
     ),
-    # Direct company career page — Meta
+    # Meta careers
     "https://www.metacareers.com/jobs/software-engineer-infrastructure",
     # iCIMS-hosted board
     (
         "https://careers-proofpoint.icims.com/jobs/5001/"
         "senior-software-engineer/job"
     ),
-    # Greenhouse (second, different company)
+    # Greenhouse (second company)
     "https://job-boards.greenhouse.io/stripe/jobs/6309270",
 ]
 
-# Number of tracked content fields in JobExtract (keep in sync with
-# agentql_job_scraper._CONTENT_FIELDS)
+# Number of tracked content fields in JobExtract.
 _TOTAL_CONTENT_FIELDS: int = 12
 
 # Console table column widths
 _COL_URL: int = 55
-_COL_METHOD: int = 22
+_COL_STRATEGY: int = 24
 _COL_FIELDS: int = 10
 _COL_TIME: int = 10
 _COL_STATUS: int = 8
 
 logger = get_logger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Result model
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class ExperimentResult:
-    """Captures the outcome of one URL × method trial.
-
-    Attributes:
-        url: Source URL of the job posting.
-        method: Extraction method used.
-        extract: The ``JobExtract`` produced (always present, even on error).
-        is_success: ``True`` when extraction completed without exception.
-        error_message: Exception message when ``is_success`` is ``False``.
-    """
-
-    url: str
-    method: ExtractionMethod
-    extract: JobExtract
-    is_success: bool
-    error_message: Optional[str] = None
-
-
-@dataclass
-class ExperimentReport:
-    """Aggregated report of all trials in one experiment run.
-
-    Attributes:
-        run_id: ISO-8601 UTC timestamp identifying the run.
-        total_trials: Total number of URL × method trials attempted.
-        successful_trials: Count of trials that completed without error.
-        results: All individual ``ExperimentResult`` instances.
-    """
-
-    run_id: str
-    total_trials: int
-    successful_trials: int
-    results: list[ExperimentResult] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +118,7 @@ class ExperimentReport:
 def _run_single_trial(
     browser,
     url: str,
-    method: ExtractionMethod,
+    strategy: BaseScraperStrategy,
 ) -> ExperimentResult:
     """Run one extraction trial and return an ``ExperimentResult``.
 
@@ -162,14 +128,16 @@ def _run_single_trial(
     Args:
         browser: Launched Playwright ``Browser`` instance shared across trials.
         url: Job posting URL to scrape.
-        method: Extraction method to apply.
+        strategy: Concrete ``BaseScraperStrategy`` instance to apply.
 
     Returns:
         An ``ExperimentResult`` with ``is_success=True`` on success or
         ``is_success=False`` plus an ``error_message`` on failure.
     """
+    method = strategy.method_name
+    scraper = AgentQlJobScraper(browser, strategy)
     try:
-        extract = extract_job_data(browser, url, method)
+        extract = scraper.scrape(url)
         return ExperimentResult(
             url=url,
             method=method,
@@ -184,16 +152,15 @@ def _run_single_trial(
             exc.reason,
             exc_info=True,
         )
-        failed_extract = JobExtract(
-            url=url,
-            method=method,
-            has_error=True,
-            error_message=str(exc),
-        )
         return ExperimentResult(
             url=url,
             method=method,
-            extract=failed_extract,
+            extract=JobExtract(
+                url=url,
+                method=method,
+                has_error=True,
+                error_message=str(exc),
+            ),
             is_success=False,
             error_message=str(exc),
         )
@@ -205,16 +172,15 @@ def _run_single_trial(
             exc,
             exc_info=True,
         )
-        failed_extract = JobExtract(
-            url=url,
-            method=method,
-            has_error=True,
-            error_message=str(exc),
-        )
         return ExperimentResult(
             url=url,
             method=method,
-            extract=failed_extract,
+            extract=JobExtract(
+                url=url,
+                method=method,
+                has_error=True,
+                error_message=str(exc),
+            ),
             is_success=False,
             error_message=str(exc),
         )
@@ -225,18 +191,30 @@ def _run_single_trial(
 # ---------------------------------------------------------------------------
 
 
-def _build_results_path(run_id: str) -> Path:
+def _build_json_path(run_id: str) -> Path:
     """Construct the JSON output file path for a given run.
 
     Args:
-        run_id: ISO-8601 UTC run identifier (colons replaced with hyphens for
-            filesystem compatibility).
+        run_id: ISO-8601 UTC run identifier.
 
     Returns:
         Absolute ``Path`` to the JSON results file.
     """
     safe_id = run_id.replace(":", "-").replace(" ", "_")
     return RESULTS_DIR / f"results_{safe_id}.json"
+
+
+def _build_markdown_path(run_id: str) -> Path:
+    """Construct the markdown report file path for a given run.
+
+    Args:
+        run_id: ISO-8601 UTC run identifier.
+
+    Returns:
+        Absolute ``Path`` to the ``.md`` report file.
+    """
+    safe_id = run_id.replace(":", "-").replace(" ", "_")
+    return RESULTS_DIR / f"report_{safe_id}.md"
 
 
 def _build_log_path(run_id: str) -> Path:
@@ -254,9 +232,6 @@ def _build_log_path(run_id: str) -> Path:
 
 def _serialize_report(report: ExperimentReport) -> dict:
     """Serialise an ``ExperimentReport`` to a plain dict for JSON output.
-
-    ``JobExtract`` dataclasses are converted via ``dataclasses.asdict``.
-    The private ``_CONTENT_FIELDS`` tuple is excluded from the output.
 
     Args:
         report: The completed experiment report.
@@ -286,10 +261,8 @@ def _serialize_report(report: ExperimentReport) -> dict:
 
 
 @log_execution
-def save_report(report: ExperimentReport, output_path: Path) -> None:
+def save_json_report(report: ExperimentReport, output_path: Path) -> None:
     """Write the experiment report to a JSON file.
-
-    Creates parent directories if they do not exist.
 
     Args:
         report: Completed ``ExperimentReport``.
@@ -299,7 +272,7 @@ def save_report(report: ExperimentReport, output_path: Path) -> None:
     payload = _serialize_report(report)
     with output_path.open("w", encoding="utf-8") as fh:
         json.dump(payload, fh, indent=2, ensure_ascii=False)
-    logger.info("Results saved to %s", output_path)
+    logger.info("JSON results saved to %s", output_path)
 
 
 # ---------------------------------------------------------------------------
@@ -308,7 +281,7 @@ def save_report(report: ExperimentReport, output_path: Path) -> None:
 
 
 def _truncate(text: str, max_len: int) -> str:
-    """Return ``text`` truncated to ``max_len`` chars with ellipsis if needed.
+    """Return ``text`` truncated to ``max_len`` chars with an ellipsis.
 
     Args:
         text: Input string.
@@ -331,7 +304,7 @@ def _print_summary_table(report: ExperimentReport) -> None:
     sep = (
         "-" * _COL_URL
         + "-+-"
-        + "-" * _COL_METHOD
+        + "-" * _COL_STRATEGY
         + "-+-"
         + "-" * _COL_FIELDS
         + "-+-"
@@ -341,7 +314,7 @@ def _print_summary_table(report: ExperimentReport) -> None:
     )
     header = (
         f"{'URL':<{_COL_URL}} | "
-        f"{'Method':<{_COL_METHOD}} | "
+        f"{'Strategy':<{_COL_STRATEGY}} | "
         f"{'Fields':<{_COL_FIELDS}} | "
         f"{'Time(ms)':<{_COL_TIME}} | "
         f"{'Status':<{_COL_STATUS}}"
@@ -349,7 +322,7 @@ def _print_summary_table(report: ExperimentReport) -> None:
 
     print()
     print(
-        f"Experiment run: {report.run_id}  |  "
+        f"Experiment run : {report.run_id}  |  "
         f"Trials: {report.total_trials}  |  "
         f"Successful: {report.successful_trials}"
     )
@@ -371,7 +344,7 @@ def _print_summary_table(report: ExperimentReport) -> None:
         )
         row = (
             f"{_truncate(result.url, _COL_URL):<{_COL_URL}} | "
-            f"{result.method:<{_COL_METHOD}} | "
+            f"{str(result.method):<{_COL_STRATEGY}} | "
             f"{fields_label:<{_COL_FIELDS}} | "
             f"{time_label:<{_COL_TIME}} | "
             f"{status:<{_COL_STATUS}}"
@@ -389,11 +362,10 @@ def _print_summary_table(report: ExperimentReport) -> None:
 
 @log_execution
 def run_experiment(job_urls: list[str]) -> ExperimentReport:
-    """Run structured and natural-language extractions for every URL.
+    """Run all three strategies against every URL.
 
-    Launches a single headless Chromium instance shared across all trials to
-    avoid the overhead of repeated browser starts.  Each trial opens and
-    closes its own page tab.
+    Launches a single headless Chromium instance shared across all trials.
+    Each trial opens and closes its own page tab.
 
     Args:
         job_urls: List of public job-posting URLs to scrape.
@@ -402,19 +374,19 @@ def run_experiment(job_urls: list[str]) -> ExperimentReport:
         A completed ``ExperimentReport`` with results for every trial.
     """
     run_id = datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
-    methods = [
-        ExtractionMethod.AQL_STRUCTURED,
-        ExtractionMethod.AQL_WITH_CONTEXT,
-        ExtractionMethod.PROMPT_EXPERIMENTAL,
+    strategies: list[BaseScraperStrategy] = [
+        AqlStructuredStrategy(),
+        AqlWithContextStrategy(),
+        PromptExperimentalStrategy(),
     ]
-    total_trials = len(job_urls) * len(methods)
+    total_trials = len(job_urls) * len(strategies)
     results: list[ExperimentResult] = []
 
     logger.info(
-        "Experiment started: run_id=%s urls=%d methods=%d trials=%d",
+        "Experiment started: run_id=%s urls=%d strategies=%d trials=%d",
         run_id,
         len(job_urls),
-        len(methods),
+        len(strategies),
         total_trials,
     )
 
@@ -422,11 +394,13 @@ def run_experiment(job_urls: list[str]) -> ExperimentReport:
         browser = playwright.chromium.launch(headless=True)
         try:
             for url in job_urls:
-                for method in methods:
+                for strategy in strategies:
                     logger.info(
-                        "Running trial: url=%s method=%s", url, method
+                        "Running trial: url=%s strategy=%s",
+                        url,
+                        strategy.method_name,
                     )
-                    result = _run_single_trial(browser, url, method)
+                    result = _run_single_trial(browser, url, strategy)
                     results.append(result)
         finally:
             browser.close()
@@ -453,11 +427,7 @@ def run_experiment(job_urls: list[str]) -> ExperimentReport:
 
 
 def main() -> None:
-    """Configure logging, run the experiment, persist results, and print table.
-
-    Logging is initialised here (once) with both a console handler and a
-    per-run log file in ``experiment_results/``.
-    """
+    """Configure logging, run the experiment, persist results, print table."""
     run_id = datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     log_path = _build_log_path(run_id)
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -471,12 +441,16 @@ def main() -> None:
 
     report = run_experiment(JOB_URLS)
 
-    results_path = _build_results_path(report.run_id)
-    save_report(report, results_path)
+    json_path = _build_json_path(report.run_id)
+    save_json_report(report, json_path)
+
+    md_path = _build_markdown_path(report.run_id)
+    save_markdown_report(report, md_path)
 
     _print_summary_table(report)
 
-    print(f"Full results : {results_path}")
+    print(f"JSON results : {json_path}")
+    print(f"Markdown report: {md_path}")
     print(f"Log file     : {log_path}")
 
 

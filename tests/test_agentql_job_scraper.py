@@ -6,11 +6,14 @@ All tests run without a browser or an AgentQL API key.  They cover:
 - Pure data-transformation helpers (_flatten_context_response,
   _parse_aql_response, _count_populated_fields)
 - Data models (JobExtract defaults, ScraperError attributes)
+- AgentQlJobScraper class (strategy injection, scrape delegation)
+- extract_job_data shim (strategy-map routing)
 """
 
 from __future__ import annotations
 
 import re
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -18,12 +21,18 @@ from job_writing_agent.utils.document_loader.src.agentql_job_scraper import (
     JOB_DESCRIPTION_PROMPT,
     JOB_DESCRIPTION_QUERY,
     JOB_DESCRIPTION_QUERY_WITH_CONTEXT,
+    AgentQlJobScraper,
     ExtractionMethod,
     JobExtract,
     ScraperError,
     _count_populated_fields,
     _flatten_context_response,
     _parse_aql_response,
+)
+from job_writing_agent.utils.document_loader.src.strategies import (
+    AqlStructuredStrategy,
+    AqlWithContextStrategy,
+    PromptExperimentalStrategy,
 )
 
 
@@ -126,7 +135,6 @@ class TestQueryConstants:
     def test_no_multiline_semantic_context(
         self, name: str, query: str
     ) -> None:
-        """AgentQL does not allow newlines inside parenthesised context."""
         matches = re.findall(r"\([^)]*\n[^)]*\)", query)
         assert matches == [], (
             f"{name}: multi-line semantic context found: {matches}"
@@ -212,7 +220,6 @@ class TestParseAqlResponse:
         assert extract.job_title == "Staff Engineer"
         assert extract.job_summary == "Build great things."
         assert extract.responsibilities == ["Design systems", "Review code"]
-        # 11 of 12 fields populated (application_deadline is None)
         assert extract.populated_fields == 11
 
     def test_aql_structured_flat_result(
@@ -224,7 +231,6 @@ class TestParseAqlResponse:
             ExtractionMethod.AQL_STRUCTURED,
         )
         assert extract.job_title == "Backend Engineer"
-        # title, company, location, summary, responsibilities -> 5
         assert extract.populated_fields == 5
 
     def test_prompt_experimental_flat_result(self) -> None:
@@ -319,8 +325,7 @@ class TestScraperError:
         assert err.reason == "timeout"
 
     def test_is_exception(self) -> None:
-        err = ScraperError("https://x.com", "bad")
-        assert isinstance(err, Exception)
+        assert isinstance(ScraperError("x", "y"), Exception)
 
     def test_str_contains_reason(self) -> None:
         err = ScraperError("https://x.com", "connection refused")
@@ -338,7 +343,9 @@ class TestScraperError:
 
 class TestJobExtractDefaults:
     def test_defaults(self) -> None:
-        j = JobExtract(url="https://x.com", method=ExtractionMethod.AQL_STRUCTURED)
+        j = JobExtract(
+            url="https://x.com", method=ExtractionMethod.AQL_STRUCTURED
+        )
         assert j.has_error is False
         assert j.responsibilities == []
         assert j.requirements == []
@@ -369,3 +376,140 @@ class TestJobExtractDefaults:
             "remote_policy",
         }
         assert set(j._CONTENT_FIELDS) == expected
+
+
+# ---------------------------------------------------------------------------
+# Strategy pattern — concrete strategies
+# ---------------------------------------------------------------------------
+
+
+class TestConcreteStrategies:
+    @pytest.mark.parametrize(
+        "strategy_cls, expected_method",
+        [
+            (AqlStructuredStrategy, ExtractionMethod.AQL_STRUCTURED),
+            (AqlWithContextStrategy, ExtractionMethod.AQL_WITH_CONTEXT),
+            (
+                PromptExperimentalStrategy,
+                ExtractionMethod.PROMPT_EXPERIMENTAL,
+            ),
+        ],
+    )
+    def test_method_name(self, strategy_cls, expected_method) -> None:
+        assert strategy_cls().method_name == expected_method
+
+    @pytest.mark.parametrize(
+        "strategy_cls",
+        [
+            AqlStructuredStrategy,
+            AqlWithContextStrategy,
+            PromptExperimentalStrategy,
+        ],
+    )
+    def test_description_is_non_empty_string(self, strategy_cls) -> None:
+        desc = strategy_cls().description
+        assert isinstance(desc, str) and len(desc) > 5
+
+    def test_aql_structured_calls_query_data(self) -> None:
+        page = MagicMock()
+        page.query_data.return_value = {"job_title": "Eng"}
+        result = AqlStructuredStrategy().execute(page)
+        page.query_data.assert_called_once_with(JOB_DESCRIPTION_QUERY)
+        assert result == {"job_title": "Eng"}
+
+    def test_aql_with_context_calls_query_data(self) -> None:
+        page = MagicMock()
+        page.query_data.return_value = {"job_title": "Eng"}
+        result = AqlWithContextStrategy().execute(page)
+        page.query_data.assert_called_once_with(
+            JOB_DESCRIPTION_QUERY_WITH_CONTEXT
+        )
+        assert result == {"job_title": "Eng"}
+
+    def test_prompt_experimental_calls_get_data_by_prompt(self) -> None:
+        page = MagicMock()
+        page.get_data_by_prompt_experimental.return_value = {
+            "job_title": "PM"
+        }
+        result = PromptExperimentalStrategy().execute(page)
+        page.get_data_by_prompt_experimental.assert_called_once_with(
+            JOB_DESCRIPTION_PROMPT
+        )
+        assert result == {"job_title": "PM"}
+
+
+# ---------------------------------------------------------------------------
+# AgentQlJobScraper
+# ---------------------------------------------------------------------------
+
+
+class TestAgentQlJobScraper:
+    def test_strategy_property(self) -> None:
+        strategy = AqlStructuredStrategy()
+        scraper = AgentQlJobScraper(MagicMock(), strategy)
+        assert scraper.strategy is strategy
+
+    def test_scrape_delegates_to_strategy(self) -> None:
+        strategy = MagicMock()
+        strategy.method_name = ExtractionMethod.AQL_STRUCTURED
+        strategy.execute.return_value = {"job_title": "Eng"}
+
+        mock_page = MagicMock()
+        mock_browser = MagicMock()
+        mock_browser.new_page.return_value = mock_page
+
+        with patch(
+            "job_writing_agent.utils.document_loader"
+            ".src.agentql_job_scraper.agentql.wrap",
+            return_value=mock_page,
+        ):
+            mock_page.goto.return_value = None
+            scraper = AgentQlJobScraper(mock_browser, strategy)
+            result = scraper.scrape("https://example.com/job")
+
+        strategy.execute.assert_called_once_with(mock_page)
+        assert result.job_title == "Eng"
+        assert result.method == ExtractionMethod.AQL_STRUCTURED
+
+    def test_scrape_closes_page_on_success(self) -> None:
+        strategy = MagicMock()
+        strategy.method_name = ExtractionMethod.AQL_STRUCTURED
+        strategy.execute.return_value = {}
+
+        mock_page = MagicMock()
+        mock_browser = MagicMock()
+        mock_browser.new_page.return_value = mock_page
+
+        with patch(
+            "job_writing_agent.utils.document_loader"
+            ".src.agentql_job_scraper.agentql.wrap",
+            return_value=mock_page,
+        ):
+            mock_page.goto.return_value = None
+            AgentQlJobScraper(mock_browser, strategy).scrape(
+                "https://example.com"
+            )
+
+        mock_page.close.assert_called_once()
+
+    def test_scrape_closes_page_on_error(self) -> None:
+        strategy = MagicMock()
+        strategy.method_name = ExtractionMethod.AQL_STRUCTURED
+        strategy.execute.side_effect = RuntimeError("boom")
+
+        mock_page = MagicMock()
+        mock_browser = MagicMock()
+        mock_browser.new_page.return_value = mock_page
+
+        with patch(
+            "job_writing_agent.utils.document_loader"
+            ".src.agentql_job_scraper.agentql.wrap",
+            return_value=mock_page,
+        ):
+            mock_page.goto.return_value = None
+            with pytest.raises(ScraperError):
+                AgentQlJobScraper(mock_browser, strategy).scrape(
+                    "https://example.com"
+                )
+
+        mock_page.close.assert_called_once()

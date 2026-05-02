@@ -6,10 +6,10 @@ All tests run without a browser or an AgentQL API key.  They cover:
 - Constant consistency (_TOTAL_CONTENT_FIELDS)
 - Path-builder helpers
 - _truncate helper
-- ExperimentResult / ExperimentReport construction
+- ExperimentResult / ExperimentReport construction (via experiment_models)
 - _serialize_report correctness and JSON round-trip
-- save_report file I/O
-- Presence of all three extraction methods in run_experiment source
+- save_json_report file I/O
+- Presence of all three strategies in run_experiment source
 """
 
 from __future__ import annotations
@@ -25,16 +25,19 @@ from job_writing_agent.utils.document_loader.src.agentql_job_scraper import (
     ExtractionMethod,
     JobExtract,
 )
+from job_writing_agent.utils.document_loader.src.experiment_models import (
+    ExperimentReport,
+    ExperimentResult,
+)
 from job_writing_agent.utils.document_loader.src.scraper_experiment import (
     _TOTAL_CONTENT_FIELDS,
+    _build_json_path,
     _build_log_path,
-    _build_results_path,
+    _build_markdown_path,
     _serialize_report,
     _truncate,
     run_experiment,
-    save_report,
-    ExperimentReport,
-    ExperimentResult,
+    save_json_report,
     JOB_URLS,
 )
 
@@ -97,7 +100,7 @@ class TestJobUrls:
             assert url.startswith("http"), f"Non-HTTP URL: {url}"
 
     def test_all_unique(self) -> None:
-        assert len(set(JOB_URLS)) == len(JOB_URLS), "Duplicate URLs found"
+        assert len(set(JOB_URLS)) == len(JOB_URLS)
 
 
 # ---------------------------------------------------------------------------
@@ -132,8 +135,7 @@ class TestTruncate:
         assert result.endswith("…")
 
     def test_output_length_equals_max_len(self) -> None:
-        result = _truncate("x" * 100, 20)
-        assert len(result) == 20
+        assert len(_truncate("x" * 100, 20)) == 20
 
 
 # ---------------------------------------------------------------------------
@@ -142,25 +144,27 @@ class TestTruncate:
 
 
 class TestPathBuilders:
-    def test_results_path_filename(self) -> None:
-        path = _build_results_path("2026-05-01T21:40:00")
+    def test_json_path_filename(self) -> None:
+        path = _build_json_path("2026-05-01T21:40:00")
         assert path.name == "results_2026-05-01T21-40-00.json"
+
+    def test_markdown_path_filename(self) -> None:
+        path = _build_markdown_path("2026-05-01T21:40:00")
+        assert path.name == "report_2026-05-01T21-40-00.md"
 
     def test_log_path_filename(self) -> None:
         path = _build_log_path("2026-05-01T21:40:00")
         assert path.name == "experiment_2026-05-01T21-40-00.log"
 
-    def test_results_path_is_under_results_dir(self) -> None:
-        path = _build_results_path("2026-01-01T00:00:00")
-        assert path.parent.name == "experiment_results"
-
-    def test_log_path_is_under_results_dir(self) -> None:
-        path = _build_log_path("2026-01-01T00:00:00")
-        assert path.parent.name == "experiment_results"
+    def test_all_paths_under_results_dir(self) -> None:
+        for builder in (_build_json_path, _build_markdown_path, _build_log_path):
+            assert builder("2026-01-01T00:00:00").parent.name == (
+                "experiment_results"
+            )
 
 
 # ---------------------------------------------------------------------------
-# ExperimentReport / ExperimentResult
+# ExperimentReport / ExperimentResult (from experiment_models)
 # ---------------------------------------------------------------------------
 
 
@@ -170,14 +174,6 @@ class TestExperimentReport:
         assert sample_report.total_trials == 2
         assert sample_report.successful_trials == 1
         assert len(sample_report.results) == 2
-
-    def test_success_and_failure_results(
-        self, sample_report: ExperimentReport
-    ) -> None:
-        successes = [r for r in sample_report.results if r.is_success]
-        failures = [r for r in sample_report.results if not r.is_success]
-        assert len(successes) == 1
-        assert len(failures) == 1
 
     def test_failed_result_has_error_message(
         self, sample_report: ExperimentReport
@@ -195,14 +191,11 @@ class TestExperimentReport:
 class TestSerializeReport:
     def test_top_level_keys(self, sample_report: ExperimentReport) -> None:
         payload = _serialize_report(sample_report)
-        assert "run_id" in payload
-        assert "total_trials" in payload
-        assert "successful_trials" in payload
-        assert "results" in payload
+        for key in ("run_id", "total_trials", "successful_trials", "results"):
+            assert key in payload
 
     def test_result_count(self, sample_report: ExperimentReport) -> None:
-        payload = _serialize_report(sample_report)
-        assert len(payload["results"]) == 2
+        assert len(_serialize_report(sample_report)["results"]) == 2
 
     def test_private_field_stripped(
         self, sample_report: ExperimentReport
@@ -212,18 +205,13 @@ class TestSerializeReport:
             assert "_CONTENT_FIELDS" not in result["extract"]
 
     def test_json_serialisable(self, sample_report: ExperimentReport) -> None:
-        payload = _serialize_report(sample_report)
-        json_str = json.dumps(payload)
-        assert json_str  # non-empty
+        assert json.dumps(_serialize_report(sample_report))
 
     def test_json_round_trip_preserves_job_title(
         self, sample_report: ExperimentReport
     ) -> None:
-        payload = _serialize_report(sample_report)
-        round_trip = json.loads(json.dumps(payload))
-        assert (
-            round_trip["results"][0]["extract"]["job_title"] == "Staff Engineer"
-        )
+        data = json.loads(json.dumps(_serialize_report(sample_report)))
+        assert data["results"][0]["extract"]["job_title"] == "Staff Engineer"
 
     def test_failure_result_preserved(
         self, sample_report: ExperimentReport
@@ -234,23 +222,21 @@ class TestSerializeReport:
 
 
 # ---------------------------------------------------------------------------
-# save_report
+# save_json_report
 # ---------------------------------------------------------------------------
 
 
-class TestSaveReport:
+class TestSaveJsonReport:
     def test_creates_file(self, sample_report: ExperimentReport) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "sub" / "results_test.json"
-            save_report(sample_report, out)
+            save_json_report(sample_report, out)
             assert out.exists()
 
-    def test_file_content_is_valid_json(
-        self, sample_report: ExperimentReport
-    ) -> None:
+    def test_file_is_valid_json(self, sample_report: ExperimentReport) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            out = Path(tmp) / "results_test.json"
-            save_report(sample_report, out)
+            out = Path(tmp) / "results.json"
+            save_json_report(sample_report, out)
             data = json.loads(out.read_text(encoding="utf-8"))
             assert data["total_trials"] == 2
 
@@ -259,19 +245,8 @@ class TestSaveReport:
     ) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "a" / "b" / "c" / "results.json"
-            save_report(sample_report, out)
+            save_json_report(sample_report, out)
             assert out.exists()
-
-    def test_failure_result_in_file(
-        self, sample_report: ExperimentReport
-    ) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            out = Path(tmp) / "results.json"
-            save_report(sample_report, out)
-            data = json.loads(out.read_text(encoding="utf-8"))
-            failures = [r for r in data["results"] if not r["is_success"]]
-            assert len(failures) == 1
-            assert failures[0]["error_message"] == "Navigation failed: timeout"
 
 
 # ---------------------------------------------------------------------------
@@ -280,14 +255,11 @@ class TestSaveReport:
 
 
 class TestRunExperimentSource:
-    """Verify the methods list inside run_experiment without executing it."""
-
-    def test_all_three_methods_present(self) -> None:
+    def test_all_three_strategies_present(self) -> None:
         src = inspect.getsource(run_experiment)
-        assert "AQL_STRUCTURED" in src
-        assert "AQL_WITH_CONTEXT" in src
-        assert "PROMPT_EXPERIMENTAL" in src
+        assert "AqlStructuredStrategy" in src
+        assert "AqlWithContextStrategy" in src
+        assert "PromptExperimentalStrategy" in src
 
     def test_headless_true(self) -> None:
-        src = inspect.getsource(run_experiment)
-        assert "headless=True" in src
+        assert "headless=True" in inspect.getsource(run_experiment)
