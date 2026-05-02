@@ -55,38 +55,11 @@ RESULTS_DIR: Path = Path(__file__).parent / "experiment_results"
 # 10 job postings across diverse job boards:
 #   Greenhouse, Workday, Lever, Ashby, SmartRecruiters, direct company pages
 JOB_URLS: list[str] = [
-    # Greenhouse
-    "https://job-boards.greenhouse.io/ocrolusinc/jobs/5837904004",
-    # Lever
-    "https://jobs.lever.co/openai/a1b2c3d4-0001-0001-0001-000000000001",
-    # Workday
-    (
-        "https://amazon.jobs/en/jobs/2972591/"
-        "software-development-engineer"
-    ),
-    # LinkedIn (public job page)
-    "https://www.linkedin.com/jobs/view/software-engineer-at-google-3912345678",
-    # Ashby
-    "https://jobs.ashbyhq.com/anthropic/software-engineer",
-    # SmartRecruiters
-    (
-        "https://jobs.smartrecruiters.com/Salesforce/"
-        "software-engineer-backend"
-    ),
-    # Direct company career page — Microsoft
-    (
-        "https://careers.microsoft.com/us/en/job/1797500/"
-        "Software-Engineer"
-    ),
-    # Direct company career page — Meta
-    "https://www.metacareers.com/jobs/software-engineer-infrastructure",
-    # iCIMS-hosted board
-    (
-        "https://careers-proofpoint.icims.com/jobs/5001/"
-        "senior-software-engineer/job"
-    ),
-    # Greenhouse (second, different company)
-    "https://job-boards.greenhouse.io/stripe/jobs/6309270",
+    "https://autodesk.wd1.myworkdayjobs.com/en-US/Ext/job/Pune%2C-IND/Senior-Software-Engineer_25WD93636-1?src=JB-10065&source=LinkedIn",
+    "https://paypal.wd1.myworkdayjobs.com/en-US/jobs/job/Bangalore-Karnataka-India/Senior-Software-Engineer---Backend--Java-_R0134858",
+    "https://fox.wd1.myworkdayjobs.com/en-US/Domestic/job/IND-KA-Bengaluru/Senior-Software-Development-Engineer--Backend_R50031537",
+    "https://altera.wd1.myworkdayjobs.com/en-US/altera/job/Bengaluru-Karnataka-India/FPGA-IP-Software-Development-Engineer_R01384-1",
+    "https://synechron.wd1.myworkdayjobs.com/en-US/SynechronCareers/job/Senior-Java-Backend-Developer---Microservices---Cloud-Integration_JR1035977",
 ]
 
 # Number of tracked content fields in JobExtract (keep in sync with
@@ -365,9 +338,7 @@ def _print_summary_table(report: ExperimentReport) -> None:
             else "—"
         )
         time_label = (
-            str(result.extract.scrape_time_ms)
-            if result.is_success
-            else "—"
+            str(result.extract.scrape_time_ms) if result.is_success else "—"
         )
         row = (
             f"{_truncate(result.url, _COL_URL):<{_COL_URL}} | "
@@ -423,9 +394,7 @@ def run_experiment(job_urls: list[str]) -> ExperimentReport:
         try:
             for url in job_urls:
                 for method in methods:
-                    logger.info(
-                        "Running trial: url=%s method=%s", url, method
-                    )
+                    logger.info("Running trial: url=%s method=%s", url, method)
                     result = _run_single_trial(browser, url, method)
                     results.append(result)
         finally:
