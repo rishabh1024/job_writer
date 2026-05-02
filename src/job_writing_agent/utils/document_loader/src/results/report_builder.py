@@ -15,7 +15,7 @@ Generates a human-readable ``.md`` file structured as:
 
     ### Strategy: AQL Structured (baseline)
     - **Status**: OK
-    - **Fields extracted**: 8 / 12
+    - **Fields extracted**: 8 / 8
     - **Scrape time**: 4 200 ms
     | Field | Value |
     |---|---|
@@ -59,10 +59,6 @@ _FIELD_LABELS: list[tuple[str, str]] = [
     ("job_title", "Job Title"),
     ("company_name", "Company"),
     ("job_location", "Location"),
-    ("employment_type", "Employment Type"),
-    ("salary_range", "Salary Range"),
-    ("remote_policy", "Remote Policy"),
-    ("application_deadline", "Application Deadline"),
     ("job_summary", "Job Summary"),
     ("responsibilities", "Responsibilities"),
     ("requirements", "Requirements"),

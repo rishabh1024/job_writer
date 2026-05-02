@@ -1,0 +1,555 @@
+{
+  "run_id": "2026-05-02T10:31:04",
+  "total_trials": 15,
+  "successful_trials": 15,
+  "results": [
+    {
+      "url": "https://autodesk.wd1.myworkdayjobs.com/en-US/Ext/job/Pune%2C-IND/Senior-Software-Engineer_25WD93636-1?src=JB-10065&source=LinkedIn",
+      "method": "aql_structured",
+      "is_success": true,
+      "error_message": null,
+      "extract": {
+        "url": "https://autodesk.wd1.myworkdayjobs.com/en-US/Ext/job/Pune%2C-IND/Senior-Software-Engineer_25WD93636-1?src=JB-10065&source=LinkedIn",
+        "method": "aql_structured",
+        "job_title": "Senior Software Engineer",
+        "company_name": "Autodesk",
+        "job_location": "Pune, IND",
+        "job_summary": "We are seeking a passionate and enthusiastic Senior Software Engineer to join our dynamic and innovative engineering team. As a Senior Software Engineer, you will be contributing to rapidly improve critical data ecosystems. You will be involved in delivering innovative solutions to sophisticated and modern engineering problems. As part of the team, you will learn, grow, and help bring data closer to our users. You will make critical choices, tackle hard problems and improve the platform’s reliability, resiliency, and scalability. The ideal candidate is someone who is excited about working in a team, can own and deliver long-term projects to completion. You are detail and quality oriented, and excited about the prospects of having a big impact with data at Autodesk.",
+        "responsibilities": [
+          "Design, architect, and implement robust tools, frameworks, and services to instrument, collect, and process product data at scale.",
+          "Lead technical discussions and collaborate closely with cross-functional engineering teams to deliver innovative and maintainable solutions.",
+          "Apply your knowledge of various technologies and choose the best fit to meet business requirements",
+          "Understand and contribute to making the product data ecosystem better",
+          "Own end-to-end development, including design, implementation, automated testing, documentation, and deployment.",
+          "Develop and maintain cross-platform applications and components that run seamlessly on Windows, macOS, and Linux.",
+          "Build reusable components and libraries",
+          "Ensure the performance, quality, speed and scalability of the application",
+          "Help our users adopt and integrate our components"
+        ],
+        "requirements": [
+          "5–12 years of professional experience in software engineering, with strong functional or object-oriented programming skills.",
+          "Proven expertise in desktop application and component development, including libraries, multi-threaded applications, and platform-specific optimizations.",
+          "Solid proficiency in C/C++, C#, Java, Python with at least 3-8 years working on desktop and component development",
+          "Experience with CI/CD pipelines, build systems, and automated deployment workflows",
+          "Proficiency with distributed version control systems (preferably Git) and modern development workflows.",
+          "Experience with at least one of the testing frameworks – GTest, Java TestNG, etc",
+          "Experience with distributed version control system (preferably git)",
+          "Humble, collaborative, team player, willing to step up and support your colleagues",
+          "Outstanding communication, problem solving and interpersonal skills",
+          "Highly organized and can write clear and reader-friendly documentation",
+          "Ability to work with minimal supervision and commit to agreed business goals",
+          "Familiar with non-functional testing such as load, performance and resiliency testing",
+          "Good command of English (Speaking, Writing and Reading)",
+          "Degree in computer science or related field"
+        ],
+        "preferred_qualifications": [
+          "Experience with virtualization software (VMware, VirtualBox, etc.) and AWS cloud services",
+          "Experience working with Big Data technologies, especially in the context of product or telemetry data.",
+          "Understanding of data architecture fundamentals, data modeling, and distributed data processing.",
+          "Strong skills in writing and optimizing SQL queries for analytics or data processing."
+        ],
+        "benefits": [
+          "annual cash bonuses",
+          "commissions for sales roles",
+          "stock grants",
+          "comprehensive benefits package"
+        ],
+        "scrape_time_ms": 21219,
+        "populated_fields": 8,
+        "has_error": false,
+        "error_message": null
+      }
+    },
+    {
+      "url": "https://autodesk.wd1.myworkdayjobs.com/en-US/Ext/job/Pune%2C-IND/Senior-Software-Engineer_25WD93636-1?src=JB-10065&source=LinkedIn",
+      "method": "aql_with_context",
+      "is_success": true,
+      "error_message": null,
+      "extract": {
+        "url": "https://autodesk.wd1.myworkdayjobs.com/en-US/Ext/job/Pune%2C-IND/Senior-Software-Engineer_25WD93636-1?src=JB-10065&source=LinkedIn",
+        "method": "aql_with_context",
+        "job_title": "Senior Software Engineer",
+        "company_name": "Autodesk",
+        "job_location": "Pune, IND",
+        "job_summary": "We are seeking a passionate and enthusiastic Senior Software Engineer to join our dynamic and innovative engineering team. As a Senior Software Engineer, you will be contributing to rapidly improve critical data ecosystems. You will be involved in delivering innovative solutions to sophisticated and modern engineering problems. As part of the team, you will learn, grow, and help bring data closer to our users. You will make critical choices, tackle hard problems and improve the platform’s reliability, resiliency, and scalability. The ideal candidate is someone who is excited about working in a team, can own and deliver long-term projects to completion. You are detail and quality oriented, and excited about the prospects of having a big impact with data at Autodesk.",
+        "responsibilities": [
+          "Design, architect, and implement robust tools, frameworks, and services to instrument, collect, and process product data at scale.",
+          "Lead technical discussions and collaborate closely with cross-functional engineering teams to deliver innovative and maintainable solutions.",
+          "Apply your knowledge of various technologies and choose the best fit to meet business requirements",
+          "Understand and contribute to making the product data ecosystem better",
+          "Own end-to-end development, including design, implementation, automated testing, documentation, and deployment.",
+          "Develop and maintain cross-platform applications and components that run seamlessly on Windows, macOS, and Linux.",
+          "Build reusable components and libraries",
+          "Ensure the performance, quality, speed and scalability of the application",
+          "Help our users adopt and integrate our components"
+        ],
+        "requirements": [
+          "5–12 years of professional experience in software engineering, with strong functional or object-oriented programming skills.",
+          "Proven expertise in desktop application and component development, including libraries, multi-threaded applications, and platform-specific optimizations.",
+          "Solid proficiency in C/C++, C#, Java, Python with at least 3-8 years working on desktop and component development",
+          "Experience with CI/CD pipelines, build systems, and automated deployment workflows",
+          "Proficiency with distributed version control systems (preferably Git) and modern development workflows.",
+          "Experience with at least one of the testing frameworks – GTest, Java TestNG, etc",
+          "Experience with distributed version control system (preferably git)",
+          "Humble, collaborative, team player, willing to step up and support your colleagues",
+          "Outstanding communication, problem solving and interpersonal skills",
+          "Highly organized and can write clear and reader-friendly documentation",
+          "Ability to work with minimal supervision and commit to agreed business goals",
+          "Familiar with non-functional testing such as load, performance and resiliency testing",
+          "Good command of English (Speaking, Writing and Reading)",
+          "Degree in computer science or related field"
+        ],
+        "preferred_qualifications": [
+          "Experience with virtualization software (VMware, VirtualBox, etc.) and AWS cloud services",
+          "Experience working with Big Data technologies, especially in the context of product or telemetry data.",
+          "Understanding of data architecture fundamentals, data modeling, and distributed data processing.",
+          "Strong skills in writing and optimizing SQL queries for analytics or data processing."
+        ],
+        "benefits": [
+          "annual cash bonuses",
+          "commissions for sales roles",
+          "stock grants",
+          "a comprehensive benefits package"
+        ],
+        "scrape_time_ms": 13375,
+        "populated_fields": 8,
+        "has_error": false,
+        "error_message": null
+      }
+    },
+    {
+      "url": "https://autodesk.wd1.myworkdayjobs.com/en-US/Ext/job/Pune%2C-IND/Senior-Software-Engineer_25WD93636-1?src=JB-10065&source=LinkedIn",
+      "method": "prompt_experimental",
+      "is_success": true,
+      "error_message": null,
+      "extract": {
+        "url": "https://autodesk.wd1.myworkdayjobs.com/en-US/Ext/job/Pune%2C-IND/Senior-Software-Engineer_25WD93636-1?src=JB-10065&source=LinkedIn",
+        "method": "prompt_experimental",
+        "job_title": null,
+        "company_name": "Autodesk",
+        "job_location": null,
+        "job_summary": null,
+        "responsibilities": [],
+        "requirements": [],
+        "preferred_qualifications": [],
+        "benefits": [],
+        "scrape_time_ms": 16406,
+        "populated_fields": 1,
+        "has_error": false,
+        "error_message": null
+      }
+    },
+    {
+      "url": "https://paypal.wd1.myworkdayjobs.com/en-US/jobs/job/Bangalore-Karnataka-India/Senior-Software-Engineer---Backend--Java-_R0134858",
+      "method": "aql_structured",
+      "is_success": true,
+      "error_message": null,
+      "extract": {
+        "url": "https://paypal.wd1.myworkdayjobs.com/en-US/jobs/job/Bangalore-Karnataka-India/Senior-Software-Engineer---Backend--Java-_R0134858",
+        "method": "aql_structured",
+        "job_title": "Senior Software Engineer - Backend (Java)",
+        "company_name": "PayPal",
+        "job_location": "Bangalore, Karnataka, India",
+        "job_summary": "EDM is the platform behind every approve/decline decision at PayPal. When a transaction comes in, our system evaluates fraud signals, risk scores, compliance rules, and merchant policies, then returns a decision in milliseconds. We handle billions of these decisions a day. The platform is going through a major modernization effort, and this team is at the center of it.",
+        "responsibilities": [
+          "Delivers complete solutions spanning all phases of the Software Development Lifecycle (SDLC) (design, implementation, testing, delivery and operations), based on definitions from more senior roles.",
+          "Advises immediate management on project-level issues",
+          "Guides junior engineers",
+          "Operates with little day-to-day supervision, making technical decisions based on knowledge of internal conventions and industry best practices",
+          "Applies knowledge of technical best practices in making decisions",
+          "Write and review code across the Studio UI, runtime engine, RDSL compiler, and K8s infrastructure.",
+          "Deploy, monitor, and troubleshoot services running on GKE across 250+ use cases.",
+          "Work on AI agents that translate natural-language rule descriptions into RDSL and push them through the release pipeline.",
+          "Collaborate with risk analysts, data scientists, and compliance teams to turn business requirements into decision rules.",
+          "Debug production issues in a system that processes billions of decisions per day.",
+          "Take ownership of features from design through deployment, with increasing scope over time.",
+          "Design, develop, and maintain platform services using Java and Python, ensuring code quality, scalability, and performance",
+          "Build and optimize data pipelines and storage solutions leveraging GCP services including BigQuery, BigTable, and GKE",
+          "Work with Kubernetes-based deployments, demonstrating solid understanding of container orchestration, scaling strategies, and cluster operations",
+          "Create detailed low-level designs and technical specifications for platform components, ensuring alignment with system architecture",
+          "Own end-to-end delivery of features—from design through production deployment—with minimal supervision",
+          "Contribute to frontend development (~20% of role) using React, supporting UI components and user-facing features as needed",
+          "Collaborate with cross-functional teams (product, data science, operations) to gather requirements and deliver integrated solutions",
+          "Leverage AI-powered development tools (Copilot, Claude, etc.) to accelerate coding, code reviews, and documentation workflows",
+          "Demonstrate intellectual curiosity in problem-solving—proactively investigate root causes, explore innovative solutions, and continuously seek to understand the \"why\" behind technical challenges",
+          "Participate in code reviews, mentor junior engineers, and contribute to engineering best practices",
+          "Troubleshoot production issues and implement improvements to enhance platform reliability"
+        ],
+        "requirements": [
+          "3+ years relevant experience and a Bachelor’s degree OR Any equivalent combination of education and experience.",
+          "Strong background in distributed systems, particularly high-throughput, latency-sensitive services.",
+          "Hands-on Kubernetes experience in production, ideally managing a large number of deployments.",
+          "Familiarity with GCP services (BigQuery, BigTable, Spanner, GKE).",
+          "Comfortable owning things end to end, from design through production operations.",
+          "Solid engineering fundamentals and ability to ramp quickly on unfamiliar systems.",
+          "Experience shipping features independently with limited guidance.",
+          "Experience with compiler design, DSLs, or language tooling (ANTLR, etc.).",
+          "Exposure to LLMs, agentic workflows, or atural-language-to-code systems."
+        ],
+        "preferred_qualifications": [],
+        "benefits": [
+          "generous paid time off",
+          "healthcare coverage for you and your family",
+          "resources to create financial security and support your mental health"
+        ],
+        "scrape_time_ms": 13702,
+        "populated_fields": 7,
+        "has_error": false,
+        "error_message": null
+      }
+    },
+    {
+      "url": "https://paypal.wd1.myworkdayjobs.com/en-US/jobs/job/Bangalore-Karnataka-India/Senior-Software-Engineer---Backend--Java-_R0134858",
+      "method": "aql_with_context",
+      "is_success": true,
+      "error_message": null,
+      "extract": {
+        "url": "https://paypal.wd1.myworkdayjobs.com/en-US/jobs/job/Bangalore-Karnataka-India/Senior-Software-Engineer---Backend--Java-_R0134858",
+        "method": "aql_with_context",
+        "job_title": "Senior Software Engineer - Backend (Java)",
+        "company_name": "PayPal",
+        "job_location": "Bangalore, Karnataka, India",
+        "job_summary": "EDM is the platform behind every approve/decline decision at PayPal. When a transaction comes in, our system evaluates fraud signals, risk scores, compliance rules, and merchant policies, then returns a decision in milliseconds. We handle billions of these decisions a day. The platform is going through a major modernization effort, and this team is at the center of it. The team owns a custom domain-specific language (RDSL), the Studio UI where rules are authored and tested, the runtime engine that executes them in production, a Kubernetes fleet of 250+ use cases, and a new set of AI agents that convert natural-language rule descriptions into valid RDSL and feed them into the release pipeline. This is a full-stack platform role, not a narrow feature team.",
+        "responsibilities": [
+          "Delivers complete solutions spanning all phases of the Software Development Lifecycle (SDLC) (design, implementation, testing, delivery and operations), based on definitions from more senior roles.",
+          "Advises immediate management on project-level issues",
+          "Guides junior engineers",
+          "Operates with little day-to-day supervision, making technical decisions based on knowledge of internal conventions and industry best practices",
+          "Applies knowledge of technical best practices in making decisions",
+          "Write and review code across the Studio UI, runtime engine, RDSL compiler, and K8s infrastructure.",
+          "Deploy, monitor, and troubleshoot services running on GKE across 250+ use cases.",
+          "Work on AI agents that translate natural-language rule descriptions into RDSL and push them through the release pipeline.",
+          "Collaborate with risk analysts, data scientists, and compliance teams to turn business requirements into decision rules.",
+          "Debug production issues in a system that processes billions of decisions per day.",
+          "Take ownership of features from design through deployment, with increasing scope over time.",
+          "Design, develop, and maintain platform services using Java and Python, ensuring code quality, scalability, and performance",
+          "Build and optimize data pipelines and storage solutions leveraging GCP services including BigQuery, BigTable, and GKE",
+          "Work with Kubernetes-based deployments, demonstrating solid understanding of container orchestration, scaling strategies, and cluster operations",
+          "Create detailed low-level designs and technical specifications for platform components, ensuring alignment with system architecture",
+          "Own end-to-end delivery of features—from design through production deployment—with minimal supervision",
+          "Contribute to frontend development (~20% of role) using React, supporting UI components and user-facing features as needed",
+          "Collaborate with cross-functional teams (product, data science, operations) to gather requirements and deliver integrated solutions",
+          "Leverage AI-powered development tools (Copilot, Claude, etc.) to accelerate coding, code reviews, and documentation workflows",
+          "Demonstrate intellectual curiosity in problem-solving—proactively investigate root causes, explore innovative solutions, and continuously seek to understand the \"why\" behind technical challenges",
+          "Participate in code reviews, mentor junior engineers, and contribute to engineering best practices",
+          "Troubleshoot production issues and implement improvements to enhance platform reliability"
+        ],
+        "requirements": [
+          "3+ years relevant experience and a Bachelor’s degree OR Any equivalent combination of education and experience.",
+          "Strong background in distributed systems, particularly high-throughput, latency-sensitive services.",
+          "Hands-on Kubernetes experience in production, ideally managing a large number of deployments.",
+          "Familiarity with GCP services (BigQuery, BigTable, Spanner, GKE).",
+          "Comfortable owning things end to end, from design through production operations.",
+          "Solid engineering fundamentals and ability to ramp quickly on unfamiliar systems.",
+          "Experience shipping features independently with limited guidance.",
+          "Experience with compiler design, DSLs, or language tooling (ANTLR, etc.).",
+          "Exposure to LLMs, agentic workflows, or atural-language-to-code systems."
+        ],
+        "preferred_qualifications": [],
+        "benefits": [
+          "generous paid time off",
+          "healthcare coverage for you and your family",
+          "resources to create financial security and support your mental health"
+        ],
+        "scrape_time_ms": 13483,
+        "populated_fields": 7,
+        "has_error": false,
+        "error_message": null
+      }
+    },
+    {
+      "url": "https://paypal.wd1.myworkdayjobs.com/en-US/jobs/job/Bangalore-Karnataka-India/Senior-Software-Engineer---Backend--Java-_R0134858",
+      "method": "prompt_experimental",
+      "is_success": true,
+      "error_message": null,
+      "extract": {
+        "url": "https://paypal.wd1.myworkdayjobs.com/en-US/jobs/job/Bangalore-Karnataka-India/Senior-Software-Engineer---Backend--Java-_R0134858",
+        "method": "prompt_experimental",
+        "job_title": null,
+        "company_name": null,
+        "job_location": null,
+        "job_summary": null,
+        "responsibilities": [],
+        "requirements": [],
+        "preferred_qualifications": [],
+        "benefits": [],
+        "scrape_time_ms": 17453,
+        "populated_fields": 0,
+        "has_error": false,
+        "error_message": null
+      }
+    },
+    {
+      "url": "https://fox.wd1.myworkdayjobs.com/en-US/Domestic/job/IND-KA-Bengaluru/Senior-Software-Development-Engineer--Backend_R50031537",
+      "method": "aql_structured",
+      "is_success": true,
+      "error_message": null,
+      "extract": {
+        "url": "https://fox.wd1.myworkdayjobs.com/en-US/Domestic/job/IND-KA-Bengaluru/Senior-Software-Development-Engineer--Backend_R50031537",
+        "method": "aql_structured",
+        "job_title": "Software Development Engineer, Backend",
+        "company_name": "Fox Corporation",
+        "job_location": "IND-KA-Bengaluru",
+        "job_summary": "As a Software Engineer in the Backend/API team, you will be responsible for building and operating scalable, resilient backend systems that power multiple consumer-facing platforms. You will work on high-throughput, low-latency services and APIs that are critical to core product experiences.",
+        "responsibilities": [
+          "Design, build, and operate backend services and APIs that run at high scale with strict reliability and performance requirements.",
+          "Take complete ownership of assigned problem areas, from requirements understanding and system design to production rollout and ongoing operations.",
+          "Perform high-level and low-level system design, clearly articulating trade-offs and architectural decisions.",
+          "Write high-quality, maintainable, and well-tested code across backend components.",
+          "Build and evolve distributed systems that are resilient, fault-tolerant, and observable in production.",
+          "Optimize existing systems for performance, latency, scalability, and cost.",
+          "Apply strong problem-solving skills and data structures knowledge to design efficient, real-world solutions.",
+          "Collaborate with cross-functional teams to deliver backend capabilities that support evolving product needs.",
+          "Participate actively in code and design reviews, maintaining high engineering standards.",
+          "Continuously improve system reliability, developer productivity, and engineering best practices within the team."
+        ],
+        "requirements": [
+          "Bachelor’s or Master’s degree in Computer Science or a related technical field.",
+          "3-6 years of experience building backend software systems in production environments.",
+          "Strong programming skills in one or more backend languages, preferably Golang.",
+          "Solid understanding of data structures, algorithms, and their application in backend and distributed systems.",
+          "Experience designing and building distributed systems with a focus on scalability, availability, and reliability.",
+          "Hands-on experience working with cloud-based systems (e.g., AWS or equivalent).",
+          "Experience working with databases and data stores (relational and/or NoSQL) and an understanding of data modeling and performance trade-offs.",
+          "Practical understanding of modern AI systems, including large language models (LLMs), and how to integrate AI capabilities into backend software.",
+          "Familiarity with using AI to build, enhance, or operate software systems (e.g., LLM-based APIs, prompt-driven workflows, automation, developer productivity).",
+          "Ability to work independently, take ownership, and deliver systems end-to-end with minimal guidance."
+        ],
+        "preferred_qualifications": [],
+        "benefits": [],
+        "scrape_time_ms": 12344,
+        "populated_fields": 6,
+        "has_error": false,
+        "error_message": null
+      }
+    },
+    {
+      "url": "https://fox.wd1.myworkdayjobs.com/en-US/Domestic/job/IND-KA-Bengaluru/Senior-Software-Development-Engineer--Backend_R50031537",
+      "method": "aql_with_context",
+      "is_success": true,
+      "error_message": null,
+      "extract": {
+        "url": "https://fox.wd1.myworkdayjobs.com/en-US/Domestic/job/IND-KA-Bengaluru/Senior-Software-Development-Engineer--Backend_R50031537",
+        "method": "aql_with_context",
+        "job_title": "Software Development Engineer, Backend",
+        "company_name": "Fox Corporation",
+        "job_location": "IND-KA-Bengaluru",
+        "job_summary": "As a Software Engineer in the Backend/API team, you will be responsible for building and operating scalable, resilient backend systems that power multiple consumer-facing platforms. You will work on high-throughput, low-latency services and APIs that are critical to core product experiences.",
+        "responsibilities": [
+          "Design, build, and operate backend services and APIs that run at high scale with strict reliability and performance requirements.",
+          "Take complete ownership of assigned problem areas, from requirements understanding and system design to production rollout and ongoing operations.",
+          "Perform high-level and low-level system design, clearly articulating trade-offs and architectural decisions.",
+          "Write high-quality, maintainable, and well-tested code across backend components.",
+          "Build and evolve distributed systems that are resilient, fault-tolerant, and observable in production.",
+          "Optimize existing systems for performance, latency, scalability, and cost.",
+          "Apply strong problem-solving skills and data structures knowledge to design efficient, real-world solutions.",
+          "Collaborate with cross-functional teams to deliver backend capabilities that support evolving product needs.",
+          "Participate actively in code and design reviews, maintaining high engineering standards.",
+          "Continuously improve system reliability, developer productivity, and engineering best practices within the team."
+        ],
+        "requirements": [
+          "Bachelor’s or Master’s degree in Computer Science or a related technical field.",
+          "3-6 years of experience building backend software systems in production environments.",
+          "Strong programming skills in one or more backend languages, preferably Golang.",
+          "Solid understanding of data structures, algorithms, and their application in backend and distributed systems.",
+          "Experience designing and building distributed systems with a focus on scalability, availability, and reliability.",
+          "Hands-on experience working with cloud-based systems (e.g., AWS or equivalent).",
+          "Experience working with databases and data stores (relational and/or NoSQL) and an understanding of data modeling and performance trade-offs.",
+          "Practical understanding of modern AI systems, including large language models (LLMs), and how to integrate AI capabilities into backend software.",
+          "Familiarity with using AI to build, enhance, or operate software systems (e.g., LLM-based APIs, prompt-driven workflows, automation, developer productivity).",
+          "Ability to work independently, take ownership, and deliver systems end-to-end with minimal guidance."
+        ],
+        "preferred_qualifications": [],
+        "benefits": [],
+        "scrape_time_ms": 11077,
+        "populated_fields": 6,
+        "has_error": false,
+        "error_message": null
+      }
+    },
+    {
+      "url": "https://fox.wd1.myworkdayjobs.com/en-US/Domestic/job/IND-KA-Bengaluru/Senior-Software-Development-Engineer--Backend_R50031537",
+      "method": "prompt_experimental",
+      "is_success": true,
+      "error_message": null,
+      "extract": {
+        "url": "https://fox.wd1.myworkdayjobs.com/en-US/Domestic/job/IND-KA-Bengaluru/Senior-Software-Development-Engineer--Backend_R50031537",
+        "method": "prompt_experimental",
+        "job_title": null,
+        "company_name": null,
+        "job_location": null,
+        "job_summary": null,
+        "responsibilities": [],
+        "requirements": [],
+        "preferred_qualifications": [],
+        "benefits": [],
+        "scrape_time_ms": 14391,
+        "populated_fields": 0,
+        "has_error": false,
+        "error_message": null
+      }
+    },
+    {
+      "url": "https://altera.wd1.myworkdayjobs.com/en-US/altera/job/Bengaluru-Karnataka-India/FPGA-IP-Software-Development-Engineer_R01384-1",
+      "method": "aql_structured",
+      "is_success": true,
+      "error_message": null,
+      "extract": {
+        "url": "https://altera.wd1.myworkdayjobs.com/en-US/altera/job/Bengaluru-Karnataka-India/FPGA-IP-Software-Development-Engineer_R01384-1",
+        "method": "aql_structured",
+        "job_title": "FPGA IP Software Development Engineer",
+        "company_name": "Altera",
+        "job_location": "Bengaluru, Karnataka, India",
+        "job_summary": "Altera provides leadership programmable solutions that are easy-to-use and deploy in applications from cloud to edge, offering limitless AI possibilities. Our end-to-end broad portfolio of products including FPGAs, CPLDs, Intellectual Property, development tools, System on Modules, SmartNICs and IPUs provide the flexibility to accelerate innovation.",
+        "responsibilities": [
+          "Research, Design, Develop, validate and optimize the software tools that enable the use of Field Programmable Gate Arrays (FPGA).",
+          "Develop Soft IPs such as DMA, Direct PHY, Ethernet , PCIe etc",
+          "Develop and optimize compilers, Partial Reconfiguration (PR) flows, assemblers, models, tools, and/or firmware that are closely coupled to FPGA silicon, IP, and boards, while leveraging strong knowledge of FPGA hardware, logic design, board design, semiconductor devices, and chip layout.",
+          "Design, develop, and optimize software abstractions and frameworks for acceleration with the FPGA for domains such as deep learning, DSP algorithms, or data analytics.",
+          "Respond to customer/client requests or events as they occur."
+        ],
+        "requirements": [
+          "Masters/Bachelor Degree in Electronics/VLSI/Digital Design or other related disciplines, with 10+ years of experience in FPGA.",
+          "FPGA/Digital Logic Design, RTL design and verification using VHDL, Verilog or System Verilog.",
+          "Experienced in FPGA Flows, Architectures and Tools like Altera Quartus",
+          "Good experience in FPGA Partial Reconfiguration (PR), SignalTap or ChipScope",
+          "Good experience with Simulation/Verification of digital designs using VCS, Questa, XCelium, Timing analysis and Hardware validation of FPGA Designs",
+          "Knowledge of Shell, Perl/TCL or Python Scripting is desired"
+        ],
+        "preferred_qualifications": [
+          "Knowledge of Bus Protocols such as PCIe ,Ethernet ,AXI, AMBA, Avalon bus protocols, High-Speed interfaces, Digital Signal Processing is an added advantage."
+        ],
+        "benefits": [],
+        "scrape_time_ms": 14921,
+        "populated_fields": 7,
+        "has_error": false,
+        "error_message": null
+      }
+    },
+    {
+      "url": "https://altera.wd1.myworkdayjobs.com/en-US/altera/job/Bengaluru-Karnataka-India/FPGA-IP-Software-Development-Engineer_R01384-1",
+      "method": "aql_with_context",
+      "is_success": true,
+      "error_message": null,
+      "extract": {
+        "url": "https://altera.wd1.myworkdayjobs.com/en-US/altera/job/Bengaluru-Karnataka-India/FPGA-IP-Software-Development-Engineer_R01384-1",
+        "method": "aql_with_context",
+        "job_title": "FPGA IP Software Development Engineer",
+        "company_name": "Altera",
+        "job_location": "Bengaluru, Karnataka, India",
+        "job_summary": null,
+        "responsibilities": [
+          "Research, Design, Develop, validate and optimize the software tools that enable the use of Field Programmable Gate Arrays (FPGA).",
+          "Develop Soft IPs such as DMA, Direct PHY, Ethernet , PCIe etc",
+          "Develop and optimize compilers, Partial Reconfiguration (PR) flows, assemblers, models, tools, and/or firmware that are closely coupled to FPGA silicon, IP, and boards, while leveraging strong knowledge of FPGA hardware, logic design, board design, semiconductor devices, and chip layout.",
+          "Design, develop, and optimize software abstractions and frameworks for acceleration with the FPGA for domains such as deep learning, DSP algorithms, or data analytics.",
+          "Respond to customer/client requests or events as they occur."
+        ],
+        "requirements": [
+          "Masters/Bachelor Degree in Electronics/VLSI/Digital Design or other related disciplines, with 10+ years of experience in FPGA.",
+          "FPGA/Digital Logic Design, RTL design and verification using VHDL, Verilog or System Verilog.",
+          "Experienced in FPGA Flows, Architectures and Tools like Altera Quartus",
+          "Good experience in FPGA Partial Reconfiguration (PR), SignalTap or ChipScope",
+          "Good experience with Simulation/Verification of digital designs using VCS, Questa, XCelium, Timing analysis and Hardware validation of FPGA Designs",
+          "Knowledge of Shell, Perl/TCL or Python Scripting is desired"
+        ],
+        "preferred_qualifications": [
+          "Knowledge of Bus Protocols such as PCIe ,Ethernet ,AXI, AMBA, Avalon bus protocols, High-Speed interfaces, Digital Signal Processing is an added advantage."
+        ],
+        "benefits": [],
+        "scrape_time_ms": 10500,
+        "populated_fields": 6,
+        "has_error": false,
+        "error_message": null
+      }
+    },
+    {
+      "url": "https://altera.wd1.myworkdayjobs.com/en-US/altera/job/Bengaluru-Karnataka-India/FPGA-IP-Software-Development-Engineer_R01384-1",
+      "method": "prompt_experimental",
+      "is_success": true,
+      "error_message": null,
+      "extract": {
+        "url": "https://altera.wd1.myworkdayjobs.com/en-US/altera/job/Bengaluru-Karnataka-India/FPGA-IP-Software-Development-Engineer_R01384-1",
+        "method": "prompt_experimental",
+        "job_title": null,
+        "company_name": null,
+        "job_location": null,
+        "job_summary": null,
+        "responsibilities": [],
+        "requirements": [],
+        "preferred_qualifications": [],
+        "benefits": [],
+        "scrape_time_ms": 13625,
+        "populated_fields": 0,
+        "has_error": false,
+        "error_message": null
+      }
+    },
+    {
+      "url": "https://synechron.wd1.myworkdayjobs.com/en-US/SynechronCareers/job/Senior-Java-Backend-Developer---Microservices---Cloud-Integration_JR1035977",
+      "method": "aql_structured",
+      "is_success": true,
+      "error_message": null,
+      "extract": {
+        "url": "https://synechron.wd1.myworkdayjobs.com/en-US/SynechronCareers/job/Senior-Java-Backend-Developer---Microservices---Cloud-Integration_JR1035977",
+        "method": "aql_structured",
+        "job_title": null,
+        "company_name": null,
+        "job_location": null,
+        "job_summary": null,
+        "responsibilities": [],
+        "requirements": [],
+        "preferred_qualifications": [],
+        "benefits": [],
+        "scrape_time_ms": 8140,
+        "populated_fields": 0,
+        "has_error": false,
+        "error_message": null
+      }
+    },
+    {
+      "url": "https://synechron.wd1.myworkdayjobs.com/en-US/SynechronCareers/job/Senior-Java-Backend-Developer---Microservices---Cloud-Integration_JR1035977",
+      "method": "aql_with_context",
+      "is_success": true,
+      "error_message": null,
+      "extract": {
+        "url": "https://synechron.wd1.myworkdayjobs.com/en-US/SynechronCareers/job/Senior-Java-Backend-Developer---Microservices---Cloud-Integration_JR1035977",
+        "method": "aql_with_context",
+        "job_title": null,
+        "company_name": null,
+        "job_location": null,
+        "job_summary": null,
+        "responsibilities": [],
+        "requirements": [],
+        "preferred_qualifications": [],
+        "benefits": [],
+        "scrape_time_ms": 7734,
+        "populated_fields": 0,
+        "has_error": false,
+        "error_message": null
+      }
+    },
+    {
+      "url": "https://synechron.wd1.myworkdayjobs.com/en-US/SynechronCareers/job/Senior-Java-Backend-Developer---Microservices---Cloud-Integration_JR1035977",
+      "method": "prompt_experimental",
+      "is_success": true,
+      "error_message": null,
+      "extract": {
+        "url": "https://synechron.wd1.myworkdayjobs.com/en-US/SynechronCareers/job/Senior-Java-Backend-Developer---Microservices---Cloud-Integration_JR1035977",
+        "method": "prompt_experimental",
+        "job_title": null,
+        "company_name": null,
+        "job_location": null,
+        "job_summary": null,
+        "responsibilities": [],
+        "requirements": [],
+        "preferred_qualifications": [],
+        "benefits": [],
+        "scrape_time_ms": 10718,
+        "populated_fields": 0,
+        "has_error": false,
+        "error_message": null
+      }
+    }
+  ]
+}

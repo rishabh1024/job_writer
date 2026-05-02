@@ -43,6 +43,7 @@ class AqlStructuredStrategy(BaseScraperStrategy):
             page: AgentQL-wrapped Playwright ``Page`` at the target URL.
 
         Returns:
-            Flat ``dict`` keyed by the field names in ``JOB_DESCRIPTION_QUERY``.
+            ``dict`` with a top-level ``body`` list containing the extracted
+            fields from ``JOB_DESCRIPTION_QUERY``.
         """
         return page.query_data(JOB_DESCRIPTION_QUERY)

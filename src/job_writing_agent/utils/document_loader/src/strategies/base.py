@@ -64,8 +64,8 @@ class BaseScraperStrategy(ABC):
 
         Returns:
             Raw ``dict`` returned by AgentQL.  Shape varies by strategy:
-            flat for ``AQL_STRUCTURED`` / ``PROMPT_EXPERIMENTAL``, nested
-            under ``job_description_section`` for ``AQL_WITH_CONTEXT``.
+            ``body[]`` wrappers for AQL strategies, and free-form keys for
+            ``PROMPT_EXPERIMENTAL``.
 
         Raises:
             Exception: Any exception from the AgentQL SDK is propagated as-is

@@ -31,7 +31,7 @@ class AqlWithContextStrategy(BaseScraperStrategy):
     nests list fields inside a ``job_description_section`` container.
 
     The raw response has a nested shape:
-    ``{"job_description_section": {"responsibilities": [...], ...}, ...}``
+    ``{"body": [{"job_description_section": {"responsibilities": [...]}}]}``
 
     ``AgentQlJobScraper`` passes this response through
     ``_flatten_context_response()`` before building a ``JobExtract``.
@@ -57,7 +57,7 @@ class AqlWithContextStrategy(BaseScraperStrategy):
             page: AgentQL-wrapped Playwright ``Page`` at the target URL.
 
         Returns:
-            Nested ``dict`` with top-level metadata fields and a
-            ``job_description_section`` sub-dict containing list fields.
+            Nested ``dict`` with a top-level ``body`` list whose items contain
+            metadata fields and a ``job_description_section`` sub-dict.
         """
         return page.query_data(JOB_DESCRIPTION_QUERY_WITH_CONTEXT)
