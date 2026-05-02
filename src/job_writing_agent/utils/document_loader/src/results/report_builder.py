@@ -217,36 +217,37 @@ def _render_summary_table(report: ExperimentReport) -> str:
     )
 
     for result in report.results:
-        key = str(result.method)
-        stats[key]["trials"] += 1
+        method_key = str(result.method)
+        stats[method_key]["trials"] += 1
         if result.is_success:
-            stats[key]["success"] += 1
-            stats[key]["total_fields"] += result.extract.populated_fields
-            stats[key]["total_time_ms"] += result.extract.scrape_time_ms
+            stats[method_key]["success"] += 1
+            stats[method_key]["total_fields"] += result.extract.populated_fields
+            stats[method_key]["total_time_ms"] += result.extract.scrape_time_ms
         else:
-            stats[key]["error"] += 1
+            stats[method_key]["error"] += 1
 
     rows = [
         "| Strategy | Trials | Success | Errors |"
         " Avg Completeness | Avg Time (ms) |",
         "|---|---|---|---|---|---|",
     ]
-    for method_key, s in stats.items():
+    for method_key, method_stats in stats.items():
         label = method_key.replace("_", " ").title()
-        success = s["success"]
-        avg_fields = (
-            f"{s['total_fields'] / success / _TOTAL_FIELDS * 100:.0f}%"
-            if success
+        success_count = method_stats["success"]
+        avg_completeness = (
+            f"{method_stats['total_fields'] / success_count / _TOTAL_FIELDS * 100:.0f}%"  # noqa: E501
+            if success_count
             else "—"
         )
-        avg_time = (
-            f"{s['total_time_ms'] // success:,}"
-            if success
+        avg_time_ms = (
+            f"{method_stats['total_time_ms'] // success_count:,}"
+            if success_count
             else "—"
         )
         rows.append(
-            f"| {label} | {s['trials']} | {success} | {s['error']} |"
-            f" {avg_fields} | {avg_time} |",
+            f"| {label} | {method_stats['trials']} | {success_count}"
+            f" | {method_stats['error']} |"
+            f" {avg_completeness} | {avg_time_ms} |",
         )
     return "\n".join(rows)
 

@@ -172,51 +172,55 @@ def _navigate_to_url(page: Page, url: str) -> None:
         raise ScraperError(url, f"Navigation failed: {exc}") from exc
 
 
-def _flatten_context_response(raw: dict) -> dict:
+def _flatten_context_response(agentql_response: dict) -> dict:
     """Hoist nested ``job_description_section`` fields up to the top level.
 
     ``JOB_DESCRIPTION_QUERY_WITH_CONTEXT`` nests ``job_summary``,
     ``responsibilities``, ``requirements``, ``preferred_qualifications``, and
     ``benefits`` inside a ``job_description_section`` container.  This helper
-    merges those fields back into a flat dict so ``_parse_aql_response`` can
-    use a single code path regardless of which query was used.
+    merges those fields back into a normalized dict so ``_parse_aql_response``
+    can use a single code path regardless of which query was used.
 
     Args:
-        raw: Dictionary returned by ``page.query_data()`` when the context
-            query was used.
+        agentql_response: Dictionary returned by ``page.query_data()`` when
+            the context query was used.
 
     Returns:
         A new flat dict with all top-level and nested content fields merged.
     """
-    section: dict = raw.get("job_description_section") or {}
+    description_section: dict = (
+        agentql_response.get("job_description_section") or {}
+    )
     return {
-        "job_title": raw.get("job_title"),
-        "company_name": raw.get("company_name"),
-        "job_location": raw.get("job_location"),
-        "employment_type": raw.get("employment_type"),
-        "salary_range": raw.get("salary_range"),
-        "remote_policy": raw.get("remote_policy"),
-        "application_deadline": raw.get("application_deadline"),
-        "job_summary": section.get("job_summary"),
-        "responsibilities": section.get("responsibilities"),
-        "requirements": section.get("requirements"),
-        "preferred_qualifications": section.get("preferred_qualifications"),
-        "benefits": section.get("benefits"),
+        "job_title": agentql_response.get("job_title"),
+        "company_name": agentql_response.get("company_name"),
+        "job_location": agentql_response.get("job_location"),
+        "employment_type": agentql_response.get("employment_type"),
+        "salary_range": agentql_response.get("salary_range"),
+        "remote_policy": agentql_response.get("remote_policy"),
+        "application_deadline": agentql_response.get("application_deadline"),
+        "job_summary": description_section.get("job_summary"),
+        "responsibilities": description_section.get("responsibilities"),
+        "requirements": description_section.get("requirements"),
+        "preferred_qualifications": description_section.get(
+            "preferred_qualifications",
+        ),
+        "benefits": description_section.get("benefits"),
     }
 
 
 def _parse_aql_response(
-    raw: dict,
+    agentql_response: dict,
     url: str,
     method: ExtractionMethod,
 ) -> JobExtract:
-    """Convert a raw AgentQL response dict into a ``JobExtract``.
+    """Convert an AgentQL response dict into a ``JobExtract``.
 
     Handles both flat (``AQL_STRUCTURED`` / ``PROMPT_EXPERIMENTAL``) and
     nested (``AQL_WITH_CONTEXT``) response shapes transparently.
 
     Args:
-        raw: Dictionary returned by ``page.query_data()`` or
+        agentql_response: Dictionary returned by ``page.query_data()`` or
             ``page.get_data_by_prompt_experimental()``.
         url: Source URL (stored in the result for traceability).
         method: Extraction method tag to stamp on the result.
@@ -224,27 +228,31 @@ def _parse_aql_response(
     Returns:
         A populated ``JobExtract`` instance.
     """
-    logger.debug("Raw AgentQL response for %s: %s", url, raw)
+    logger.debug("AgentQL response for %s: %s", url, agentql_response)
 
-    flat = _flatten_context_response(raw) if (
-        method == ExtractionMethod.AQL_WITH_CONTEXT
-    ) else raw
+    normalized_response = (
+        _flatten_context_response(agentql_response)
+        if method == ExtractionMethod.AQL_WITH_CONTEXT
+        else agentql_response
+    )
 
     extract = JobExtract(
         url=url,
         method=method,
-        job_title=flat.get("job_title"),
-        company_name=flat.get("company_name"),
-        job_location=flat.get("job_location"),
-        employment_type=flat.get("employment_type"),
-        salary_range=flat.get("salary_range"),
-        job_summary=flat.get("job_summary"),
-        responsibilities=flat.get("responsibilities") or [],
-        requirements=flat.get("requirements") or [],
-        preferred_qualifications=flat.get("preferred_qualifications") or [],
-        benefits=flat.get("benefits") or [],
-        application_deadline=flat.get("application_deadline"),
-        remote_policy=flat.get("remote_policy"),
+        job_title=normalized_response.get("job_title"),
+        company_name=normalized_response.get("company_name"),
+        job_location=normalized_response.get("job_location"),
+        employment_type=normalized_response.get("employment_type"),
+        salary_range=normalized_response.get("salary_range"),
+        job_summary=normalized_response.get("job_summary"),
+        responsibilities=normalized_response.get("responsibilities") or [],
+        requirements=normalized_response.get("requirements") or [],
+        preferred_qualifications=(
+            normalized_response.get("preferred_qualifications") or []
+        ),
+        benefits=normalized_response.get("benefits") or [],
+        application_deadline=normalized_response.get("application_deadline"),
+        remote_policy=normalized_response.get("remote_policy"),
     )
     extract.populated_fields = _count_populated_fields(extract)
     return extract
@@ -364,10 +372,10 @@ class AgentQlJobScraper:
         page: Page = agentql.wrap(self._browser.new_page())
         try:
             _navigate_to_url(page, url)
-            raw: dict = self._strategy.execute(page)
+            agentql_response: dict = self._strategy.execute(page)
 
             elapsed_s = time.monotonic() - start_time
-            extract = _parse_aql_response(raw, url, method)
+            extract = _parse_aql_response(agentql_response, url, method)
             extract.scrape_time_ms = int(elapsed_s * 1_000)
 
             _warn_if_slow(elapsed_s, url, method)

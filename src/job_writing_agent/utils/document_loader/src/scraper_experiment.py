@@ -214,11 +214,11 @@ def _serialize_report(report: ExperimentReport) -> dict:
     Returns:
         A JSON-serialisable ``dict``.
     """
-    results_list = []
+    serialized_results = []
     for result in report.results:
         extract_dict = asdict(result.extract)
         extract_dict.pop("_CONTENT_FIELDS", None)
-        results_list.append(
+        serialized_results.append(
             {
                 "url": result.url,
                 "method": result.method,
@@ -231,7 +231,7 @@ def _serialize_report(report: ExperimentReport) -> dict:
         "run_id": report.run_id,
         "total_trials": report.total_trials,
         "successful_trials": report.successful_trials,
-        "results": results_list,
+        "results": serialized_results,
     }
 
 
@@ -245,8 +245,8 @@ def save_json_report(report: ExperimentReport, output_path: Path) -> None:
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     payload = _serialize_report(report)
-    with output_path.open("w", encoding="utf-8") as fh:
-        json.dump(payload, fh, indent=2, ensure_ascii=False)
+    with output_path.open("w", encoding="utf-8") as json_file:
+        json.dump(payload, json_file, indent=2, ensure_ascii=False)
     logger.info("JSON results saved to %s", output_path)
 
 
@@ -370,7 +370,7 @@ def run_experiment(job_urls: list[str]) -> ExperimentReport:
         finally:
             browser.close()
 
-    successful = sum(1 for r in results if r.is_success)
+    successful = sum(1 for trial_result in results if trial_result.is_success)
     report = ExperimentReport(
         run_id=run_id,
         total_trials=total_trials,
