@@ -1,4 +1,4 @@
-"""AgentQL job-description scraper experiment.
+r"""AgentQL job-description scraper experiment.
 
 Runs three extraction strategies on 10 diverse job-posting URLs (30 trials):
 
@@ -25,10 +25,10 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import Browser, sync_playwright
 
 from job_writing_agent.utils.app_log.logging_config import (
     LoggingManager,
@@ -54,26 +54,46 @@ from job_writing_agent.utils.document_loader.src.strategies import (
     PromptExperimentalStrategy,
 )
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
 RESULTS_DIR: Path = Path(__file__).parent / "experiment_results"
 
-# 10 job postings across diverse job boards:
-#   Greenhouse, Workday, Lever, Ashby, SmartRecruiters, direct company pages
 JOB_URLS: list[str] = [
-    "https://autodesk.wd1.myworkdayjobs.com/en-US/Ext/job/Pune%2C-IND/Senior-Software-Engineer_25WD93636-1?src=JB-10065&source=LinkedIn",
-    "https://paypal.wd1.myworkdayjobs.com/en-US/jobs/job/Bangalore-Karnataka-India/Senior-Software-Engineer---Backend--Java-_R0134858",
-    "https://fox.wd1.myworkdayjobs.com/en-US/Domestic/job/IND-KA-Bengaluru/Senior-Software-Development-Engineer--Backend_R50031537",
-    "https://altera.wd1.myworkdayjobs.com/en-US/altera/job/Bengaluru-Karnataka-India/FPGA-IP-Software-Development-Engineer_R01384-1",
-    "https://synechron.wd1.myworkdayjobs.com/en-US/SynechronCareers/job/Senior-Java-Backend-Developer---Microservices---Cloud-Integration_JR1035977",
+    # Greenhouse
+    "https://job-boards.greenhouse.io/ocrolusinc/jobs/5837904004",
+    # Lever
+    "https://jobs.lever.co/openai/a1b2c3d4-0001-0001-0001-000000000001",
+    # Workday / Amazon Jobs
+    (
+        "https://amazon.jobs/en/jobs/2972591/"
+        "software-development-engineer"
+    ),
+    # LinkedIn (public job page)
+    "https://www.linkedin.com/jobs/view/software-engineer-at-google-3912345678",
+    # Ashby
+    "https://jobs.ashbyhq.com/anthropic/software-engineer",
+    # SmartRecruiters
+    (
+        "https://jobs.smartrecruiters.com/Salesforce/"
+        "software-engineer-backend"
+    ),
+    # Microsoft careers
+    (
+        "https://careers.microsoft.com/us/en/job/1797500/"
+        "Software-Engineer"
+    ),
+    # Meta careers
+    "https://www.metacareers.com/jobs/software-engineer-infrastructure",
+    # iCIMS-hosted board
+    (
+        "https://careers-proofpoint.icims.com/jobs/5001/"
+        "senior-software-engineer/job"
+    ),
+    # Greenhouse (second company)
+    "https://job-boards.greenhouse.io/stripe/jobs/6309270",
 ]
 
 # Number of tracked content fields in JobExtract.
-_TOTAL_CONTENT_FIELDS: int = 8
+_TOTAL_CONTENT_FIELDS: int = len(JobExtract.CONTENT_FIELDS)
 
-# Console table column widths
 _COL_URL: int = 55
 _COL_STRATEGY: int = 24
 _COL_FIELDS: int = 10
@@ -83,13 +103,8 @@ _COL_STATUS: int = 8
 logger = get_logger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Private helpers — trial execution
-# ---------------------------------------------------------------------------
-
-
 def _run_single_trial(
-    browser,
+    browser: Browser,
     url: str,
     strategy: BaseScraperStrategy,
 ) -> ExperimentResult:
@@ -118,12 +133,11 @@ def _run_single_trial(
             is_success=True,
         )
     except ScraperError as exc:
-        logger.error(
+        logger.exception(
             "ScraperError for %s via %s: %s",
             url,
             method,
             exc.reason,
-            exc_info=True,
         )
         return ExperimentResult(
             url=url,
@@ -137,14 +151,8 @@ def _run_single_trial(
             is_success=False,
             error_message=str(exc),
         )
-    except Exception as exc:  # noqa: BLE001
-        logger.error(
-            "Unexpected error for %s via %s: %s",
-            url,
-            method,
-            exc,
-            exc_info=True,
-        )
+    except Exception as exc:
+        logger.exception("Unexpected error for %s via %s", url, method)
         return ExperimentResult(
             url=url,
             method=method,
@@ -157,11 +165,6 @@ def _run_single_trial(
             is_success=False,
             error_message=str(exc),
         )
-
-
-# ---------------------------------------------------------------------------
-# Private helpers — persistence
-# ---------------------------------------------------------------------------
 
 
 def _build_json_path(run_id: str) -> Path:
@@ -212,24 +215,24 @@ def _serialize_report(report: ExperimentReport) -> dict:
     Returns:
         A JSON-serialisable ``dict``.
     """
-    results_list = []
+    serialized_results = []
     for result in report.results:
         extract_dict = asdict(result.extract)
         extract_dict.pop("_CONTENT_FIELDS", None)
-        results_list.append(
+        serialized_results.append(
             {
                 "url": result.url,
                 "method": result.method,
                 "is_success": result.is_success,
                 "error_message": result.error_message,
                 "extract": extract_dict,
-            }
+            },
         )
     return {
         "run_id": report.run_id,
         "total_trials": report.total_trials,
         "successful_trials": report.successful_trials,
-        "results": results_list,
+        "results": serialized_results,
     }
 
 
@@ -243,14 +246,9 @@ def save_json_report(report: ExperimentReport, output_path: Path) -> None:
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     payload = _serialize_report(report)
-    with output_path.open("w", encoding="utf-8") as fh:
-        json.dump(payload, fh, indent=2, ensure_ascii=False)
+    with output_path.open("w", encoding="utf-8") as json_file:
+        json.dump(payload, json_file, indent=2, ensure_ascii=False)
     logger.info("JSON results saved to %s", output_path)
-
-
-# ---------------------------------------------------------------------------
-# Private helpers — console display
-# ---------------------------------------------------------------------------
 
 
 def _truncate(text: str, max_len: int) -> str:
@@ -297,7 +295,7 @@ def _print_summary_table(report: ExperimentReport) -> None:
     print(
         f"Experiment run : {report.run_id}  |  "
         f"Trials: {report.total_trials}  |  "
-        f"Successful: {report.successful_trials}"
+        f"Successful: {report.successful_trials}",
     )
     print(sep)
     print(header)
@@ -315,7 +313,7 @@ def _print_summary_table(report: ExperimentReport) -> None:
         )
         row = (
             f"{_truncate(result.url, _COL_URL):<{_COL_URL}} | "
-            f"{str(result.method):<{_COL_STRATEGY}} | "
+            f"{result.method!s:<{_COL_STRATEGY}} | "
             f"{fields_label:<{_COL_FIELDS}} | "
             f"{time_label:<{_COL_TIME}} | "
             f"{status:<{_COL_STATUS}}"
@@ -324,11 +322,6 @@ def _print_summary_table(report: ExperimentReport) -> None:
 
     print(sep)
     print()
-
-
-# ---------------------------------------------------------------------------
-# Orchestration
-# ---------------------------------------------------------------------------
 
 
 @log_execution
@@ -344,7 +337,7 @@ def run_experiment(job_urls: list[str]) -> ExperimentReport:
     Returns:
         A completed ``ExperimentReport`` with results for every trial.
     """
-    run_id = datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    run_id = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S")
     strategies: list[BaseScraperStrategy] = [
         AqlStructuredStrategy(),
         AqlWithContextStrategy(),
@@ -376,7 +369,7 @@ def run_experiment(job_urls: list[str]) -> ExperimentReport:
         finally:
             browser.close()
 
-    successful = sum(1 for r in results if r.is_success)
+    successful = sum(1 for trial_result in results if trial_result.is_success)
     report = ExperimentReport(
         run_id=run_id,
         total_trials=total_trials,
@@ -392,14 +385,9 @@ def run_experiment(job_urls: list[str]) -> ExperimentReport:
     return report
 
 
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-
-
 def main() -> None:
     """Configure logging, run the experiment, persist results, print table."""
-    run_id = datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    run_id = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S")
     log_path = _build_log_path(run_id)
     log_path.parent.mkdir(parents=True, exist_ok=True)
 

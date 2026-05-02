@@ -11,98 +11,65 @@ Public API
 
 Data models
 -----------
-``JobExtract``    — structured extraction result dataclass
-``ScraperError``  — typed exception raised on navigation / extraction failure
-``ExtractionMethod`` — StrEnum identifying each strategy variant
+``JobExtract``       -- structured extraction result dataclass
+``ScraperError``     -- typed exception raised on navigation /
+                        extraction failure
+``ExtractionMethod`` -- StrEnum identifying each strategy variant (re-exported
+                        from ``_constants`` for backward compatibility)
 
-Query / prompt constants
-------------------------
-``JOB_DESCRIPTION_QUERY``              — bare AQL query (no context)
-``JOB_DESCRIPTION_QUERY_WITH_CONTEXT`` — AQL query with semantic + structural context
-``JOB_DESCRIPTION_PROMPT``             — free-form NL prompt
+Query / prompt constants (re-exported from ``_constants``)
+----------------------------------------------------------
+``JOB_DESCRIPTION_QUERY``              -- bare AQL query (no context)
+``JOB_DESCRIPTION_QUERY_WITH_CONTEXT`` -- AQL + semantic / structural context
+``JOB_DESCRIPTION_PROMPT``             -- free-form NL prompt
 """
 
 from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from enum import StrEnum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, ClassVar
 
 import agentql
-from agentql.ext.playwright.sync_api import Page
-from playwright.sync_api import Browser
 
 from job_writing_agent.utils.app_log.logging_config import get_logger
 from job_writing_agent.utils.app_log.logging_decorators import log_execution
+from job_writing_agent.utils.document_loader.src._constants import (
+    JOB_DESCRIPTION_PROMPT,
+    JOB_DESCRIPTION_QUERY,
+    JOB_DESCRIPTION_QUERY_WITH_CONTEXT,
+    ExtractionMethod,
+)
+from job_writing_agent.utils.document_loader.src.strategies import (
+    AqlStructuredStrategy,
+    AqlWithContextStrategy,
+    PromptExperimentalStrategy,
+)
 
 if TYPE_CHECKING:
+    from agentql.ext.playwright.sync_api import Page
+    from playwright.sync_api import Browser
+
     from job_writing_agent.utils.document_loader.src.strategies.base import (
         BaseScraperStrategy,
     )
 
-logger = get_logger(__name__)
+# Re-export constants so existing callers keep working.
+__all__ = [
+    "JOB_DESCRIPTION_PROMPT",
+    "JOB_DESCRIPTION_QUERY",
+    "JOB_DESCRIPTION_QUERY_WITH_CONTEXT",
+    "AgentQlJobScraper",
+    "ExtractionMethod",
+    "JobExtract",
+    "ScraperError",
+    "extract_job_data",
+]
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
+logger = get_logger(__name__)
 
 PAGE_TIMEOUT_MS: int = 30_000
 SLOW_RESPONSE_THRESHOLD_S: float = 15.0
-
-# ---------------------------------------------------------------------------
-# Bare AQL query — field names only, no context hints.
-# Kept here (not in the strategy file) so tests and the function shim can
-# import it without importing the strategy sub-package.
-# ---------------------------------------------------------------------------
-JOB_DESCRIPTION_QUERY: str = """
-{
-    body[] {
-    job_title
-    company_name
-    job_location
-    job_summary
-    responsibilities[]
-    requirements[]
-    preferred_qualifications[]
-    benefits[]
-        }
-}
-"""
-
-# ---------------------------------------------------------------------------
-# Context-enriched AQL query.
-# Applies both AgentQL best practices:
-#   1. Semantic context — parentheses descriptions on every field
-#   2. Structural context — list fields nested under job_description_section
-# Reference: https://docs.agentql.com/agentql-query/best-practices
-# ---------------------------------------------------------------------------
-JOB_DESCRIPTION_QUERY_WITH_CONTEXT: str = """
-{
-    body[] {
-        job_title(the h1 or prominent heading that names the open role)
-    company_name(the name of the hiring organisation or employer)
-    job_location(office city, region, country or remote label for the role)
-    job_description_section(the main body section of the job posting) {
-        job_summary(introductory paragraph or overview of the role)
-        responsibilities(list of duties and day-to-day tasks for the role)[]
-        requirements(mandatory qualifications, skills or experience needed)[]
-        preferred_qualifications(nice-to-have or bonus qualifications)[]
-        benefits(perks, compensation extras or employee benefits listed)[]
-    }
-    }
-}
-"""
-
-# Prompt for the experimental prompt-based extraction method.
-# Passed to get_data_by_prompt_experimental() which uses a different
-# (non-AQL) inference path on the AgentQL backend.
-JOB_DESCRIPTION_PROMPT: str = (
-    "Extract all job description details: job title, company name, "
-    "location, job summary, list of responsibilities, list of requirements, "
-    "list of preferred qualifications, and list of benefits."
-)
-
 
 # ---------------------------------------------------------------------------
 # Data models
@@ -123,26 +90,6 @@ class ScraperError(Exception):
         super().__init__(f"Scrape failed for {url!r}: {reason}")
 
 
-class ExtractionMethod(StrEnum):
-    """Supported extraction strategies.
-
-    Attributes:
-        AQL_STRUCTURED: Bare AQL query with field names only.  Useful as a
-            baseline to measure the uplift from adding context hints.
-        AQL_WITH_CONTEXT: AQL query enriched with semantic context
-            descriptions ``(...)`` on every field and structural nesting for
-            the main description section.  This is the recommended approach
-            per AgentQL best practices.
-        PROMPT_EXPERIMENTAL: Free-form natural-language prompt passed to
-            ``get_data_by_prompt_experimental()``.  Uses a different AgentQL
-            inference path that does not require an AQL query.
-    """
-
-    AQL_STRUCTURED = "aql_structured"
-    AQL_WITH_CONTEXT = "aql_with_context"
-    PROMPT_EXPERIMENTAL = "prompt_experimental"
-
-
 @dataclass
 class JobExtract:
     """Structured output of a single job-description extraction.
@@ -158,49 +105,58 @@ class JobExtract:
         job_title: Title of the role.
         company_name: Hiring company.
         job_location: Office / city / remote label.
+        employment_type: Full-time, part-time, contract, or similar label.
+        salary_range: Compensation or pay range.
         job_summary: Introductory paragraph or overview.
         responsibilities: List of role responsibilities.
         requirements: Mandatory qualifications.
         preferred_qualifications: Nice-to-have qualifications.
         benefits: Perks and benefits listed.
+        application_deadline: Closing date or apply-by date.
+        remote_policy: Remote, hybrid, or on-site work arrangement.
         scrape_time_ms: Wall-clock time for the extraction in milliseconds.
         populated_fields: Count of non-None content fields extracted.
         has_error: Whether extraction raised an exception.
         error_message: Exception message when ``has_error`` is ``True``.
+        CONTENT_FIELDS: Class-level tuple of every tracked content field name.
+            Declared as ``ClassVar`` so it is not treated as a dataclass field.
     """
+
+    CONTENT_FIELDS: ClassVar[tuple[str, ...]] = (
+        "job_title",
+        "company_name",
+        "job_location",
+        "employment_type",
+        "salary_range",
+        "job_summary",
+        "responsibilities",
+        "requirements",
+        "preferred_qualifications",
+        "benefits",
+        "application_deadline",
+        "remote_policy",
+    )
 
     url: str
     method: ExtractionMethod
 
-    job_title: Optional[str] = None
-    company_name: Optional[str] = None
-    job_location: Optional[str] = None
-    job_summary: Optional[str] = None
+    job_title: str | None = None
+    company_name: str | None = None
+    job_location: str | None = None
+    employment_type: str | None = None
+    salary_range: str | None = None
+    job_summary: str | None = None
     responsibilities: list[str] = field(default_factory=list)
     requirements: list[str] = field(default_factory=list)
     preferred_qualifications: list[str] = field(default_factory=list)
     benefits: list[str] = field(default_factory=list)
+    application_deadline: str | None = None
+    remote_policy: str | None = None
 
     scrape_time_ms: int = 0
     populated_fields: int = 0
     has_error: bool = False
-    error_message: Optional[str] = None
-
-    _CONTENT_FIELDS: tuple[str, ...] = field(
-        default=(
-            "job_title",
-            "company_name",
-            "job_location",
-            "job_summary",
-            "responsibilities",
-            "requirements",
-            "preferred_qualifications",
-            "benefits",
-        ),
-        init=False,
-        repr=False,
-        compare=False,
-    )
+    error_message: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -238,16 +194,7 @@ def _score_body_candidate(candidate: dict) -> int:
     """Score a ``body[]`` candidate by how many target fields it contains."""
     section = candidate.get("job_description_section") or {}
     score = 0
-    for field_name in (
-        "job_title",
-        "company_name",
-        "job_location",
-        "job_summary",
-        "responsibilities",
-        "requirements",
-        "preferred_qualifications",
-        "benefits",
-    ):
+    for field_name in JobExtract.CONTENT_FIELDS:
         value = candidate.get(field_name)
         if value is None and isinstance(section, dict):
             value = section.get(field_name)
@@ -273,50 +220,58 @@ def _unwrap_body_response(raw: dict) -> dict:
     return raw
 
 
-def _flatten_context_response(raw: dict) -> dict:
+def _flatten_context_response(agentql_response: dict) -> dict:
     """Hoist nested ``job_description_section`` fields up to the top level.
 
-    ``JOB_DESCRIPTION_QUERY_WITH_CONTEXT`` wraps fields in ``body[]`` and
-    nests ``job_summary``, ``responsibilities``, ``requirements``,
-    ``preferred_qualifications``, and ``benefits`` inside a
-    ``job_description_section`` container.  This helper merges those fields
-    back into a flat dict so ``_parse_aql_response`` can use a single code path
-    regardless of which query was used.
+    ``JOB_DESCRIPTION_QUERY_WITH_CONTEXT`` may return a top-level ``body``
+    wrapper and nests ``job_summary``,
+    ``responsibilities``, ``requirements``, ``preferred_qualifications``, and
+    ``benefits`` inside a ``job_description_section`` container.  This helper
+    merges those fields back into a flat dict so ``_parse_aql_response`` can
+    use a single code path regardless of which query was used.
 
     Args:
-        raw: Dictionary returned by ``page.query_data()`` when the context
-            query was used.
+        agentql_response: Dictionary returned by ``page.query_data()`` when
+            the context query was used.
 
     Returns:
         A new flat dict with all top-level and nested content fields merged.
     """
-    body = _unwrap_body_response(raw)
-    section_raw = body.get("job_description_section") or {}
+    payload = _unwrap_body_response(agentql_response)
+    section_raw = payload.get("job_description_section") or {}
     section = section_raw if isinstance(section_raw, dict) else {}
     return {
-        "job_title": body.get("job_title"),
-        "company_name": body.get("company_name"),
-        "job_location": body.get("job_location"),
-        "job_summary": section.get("job_summary") or body.get("job_summary"),
+        "job_title": payload.get("job_title"),
+        "company_name": payload.get("company_name"),
+        "job_location": payload.get("job_location"),
+        "employment_type": payload.get("employment_type"),
+        "salary_range": payload.get("salary_range"),
+        "remote_policy": payload.get("remote_policy"),
+        "application_deadline": payload.get("application_deadline"),
+        "job_summary": section.get("job_summary")
+        or payload.get("job_summary"),
         "responsibilities": section.get("responsibilities")
-        or body.get("responsibilities"),
-        "requirements": section.get("requirements") or body.get("requirements"),
+        or payload.get("responsibilities"),
+        "requirements": section.get("requirements")
+        or payload.get("requirements"),
         "preferred_qualifications": section.get("preferred_qualifications")
-        or body.get("preferred_qualifications"),
-        "benefits": section.get("benefits") or body.get("benefits"),
+        or payload.get("preferred_qualifications"),
+        "benefits": section.get("benefits") or payload.get("benefits"),
     }
 
 
 def _parse_aql_response(
-    raw: dict, url: str, method: ExtractionMethod
+    agentql_response: dict,
+    url: str,
+    method: ExtractionMethod,
 ) -> JobExtract:
-    """Convert a raw AgentQL response dict into a ``JobExtract``.
+    """Convert an AgentQL response dict into a ``JobExtract``.
 
     Handles both flat (``AQL_STRUCTURED`` / ``PROMPT_EXPERIMENTAL``) and
     nested (``AQL_WITH_CONTEXT``) response shapes transparently.
 
     Args:
-        raw: Dictionary returned by ``page.query_data()`` or
+        agentql_response: Dictionary returned by ``page.query_data()`` or
             ``page.get_data_by_prompt_experimental()``.
         url: Source URL (stored in the result for traceability).
         method: Extraction method tag to stamp on the result.
@@ -324,12 +279,13 @@ def _parse_aql_response(
     Returns:
         A populated ``JobExtract`` instance.
     """
-    logger.debug("Raw AgentQL response for %s: %s", url, raw)
+    logger.debug("AgentQL response for %s: %s", url, agentql_response)
 
-    if method == ExtractionMethod.AQL_WITH_CONTEXT:
-        flat = _flatten_context_response(raw)
-    else:
-        flat = _unwrap_body_response(raw)
+    flat = (
+        _flatten_context_response(agentql_response)
+        if method == ExtractionMethod.AQL_WITH_CONTEXT
+        else _unwrap_body_response(agentql_response)
+    )
 
     extract = JobExtract(
         url=url,
@@ -337,11 +293,15 @@ def _parse_aql_response(
         job_title=flat.get("job_title"),
         company_name=flat.get("company_name"),
         job_location=flat.get("job_location"),
+        employment_type=flat.get("employment_type"),
+        salary_range=flat.get("salary_range"),
         job_summary=flat.get("job_summary"),
         responsibilities=flat.get("responsibilities") or [],
         requirements=flat.get("requirements") or [],
         preferred_qualifications=flat.get("preferred_qualifications") or [],
         benefits=flat.get("benefits") or [],
+        application_deadline=flat.get("application_deadline"),
+        remote_policy=flat.get("remote_policy"),
     )
     extract.populated_fields = _count_populated_fields(extract)
     return extract
@@ -356,12 +316,10 @@ def _count_populated_fields(extract: JobExtract) -> int:
     Returns:
         Integer count of fields that are truthy (non-None, non-empty list).
     """
-    count = 0
-    for field_name in extract._CONTENT_FIELDS:
-        value = getattr(extract, field_name)
-        if value:
-            count += 1
-    return count
+    return sum(
+        1 for field_name in JobExtract.CONTENT_FIELDS
+        if getattr(extract, field_name)
+    )
 
 
 def _warn_if_partial(extract: JobExtract, total_fields: int) -> None:
@@ -381,7 +339,11 @@ def _warn_if_partial(extract: JobExtract, total_fields: int) -> None:
         )
 
 
-def _warn_if_slow(elapsed_s: float, url: str, method: ExtractionMethod) -> None:
+def _warn_if_slow(
+    elapsed_s: float,
+    url: str,
+    method: ExtractionMethod,
+) -> None:
     """Emit a WARNING when a scrape exceeds the slow-response threshold.
 
     Args:
@@ -397,11 +359,6 @@ def _warn_if_slow(elapsed_s: float, url: str, method: ExtractionMethod) -> None:
             elapsed_s,
             SLOW_RESPONSE_THRESHOLD_S,
         )
-
-
-# ---------------------------------------------------------------------------
-# AgentQlJobScraper — strategy-pattern entry point
-# ---------------------------------------------------------------------------
 
 
 class AgentQlJobScraper:
@@ -421,7 +378,9 @@ class AgentQlJobScraper:
         strategy: Concrete ``BaseScraperStrategy`` to use for extraction.
     """
 
-    def __init__(self, browser: Browser, strategy: BaseScraperStrategy) -> None:
+    def __init__(
+        self, browser: Browser, strategy: BaseScraperStrategy
+    ) -> None:
         self._browser = browser
         self._strategy = strategy
 
@@ -455,42 +414,45 @@ class AgentQlJobScraper:
         method = self._strategy.method_name
         logger.info("Starting extraction: url=%s strategy=%s", url, method)
         start_time = time.monotonic()
+        total_fields = len(JobExtract.CONTENT_FIELDS)
 
         page: Page = agentql.wrap(self._browser.new_page())
         try:
             _navigate_to_url(page, url)
-            raw: dict = self._strategy.execute(page)
+            agentql_response: dict = self._strategy.execute(page)
 
             elapsed_s = time.monotonic() - start_time
-            extract = _parse_aql_response(raw, url, method)
+            extract = _parse_aql_response(agentql_response, url, method)
             extract.scrape_time_ms = int(elapsed_s * 1_000)
 
             _warn_if_slow(elapsed_s, url, method)
-            _warn_if_partial(extract, len(extract._CONTENT_FIELDS))
+            _warn_if_partial(extract, total_fields)
 
+        except ScraperError:
+            page.close()
+            raise
+        except Exception as exc:
+            page.close()
+            raise ScraperError(url, str(exc)) from exc
+        else:
+            page.close()
             logger.info(
                 "Extraction complete: url=%s strategy=%s "
                 "fields=%d/%d time=%dms",
                 url,
                 method,
                 extract.populated_fields,
-                len(extract._CONTENT_FIELDS),
+                total_fields,
                 extract.scrape_time_ms,
             )
             return extract
 
-        except ScraperError:
-            raise
-        except Exception as exc:
-            elapsed_s = time.monotonic() - start_time
-            raise ScraperError(url, str(exc)) from exc
-        finally:
-            page.close()
 
-
-# ---------------------------------------------------------------------------
-# Backward-compatible function shim
-# ---------------------------------------------------------------------------
+_STRATEGY_MAP = {
+    ExtractionMethod.AQL_STRUCTURED: AqlStructuredStrategy,
+    ExtractionMethod.AQL_WITH_CONTEXT: AqlWithContextStrategy,
+    ExtractionMethod.PROMPT_EXPERIMENTAL: PromptExperimentalStrategy,
+}
 
 
 @log_execution
@@ -522,21 +484,8 @@ def extract_job_data(
             exception during data extraction.
         ValueError: If ``method`` is not a recognised ``ExtractionMethod``.
     """
-    from job_writing_agent.utils.document_loader.src.strategies import (
-        AqlStructuredStrategy,
-        AqlWithContextStrategy,
-        PromptExperimentalStrategy,
-    )
-
-    strategy_map = {
-        ExtractionMethod.AQL_STRUCTURED: AqlStructuredStrategy,
-        ExtractionMethod.AQL_WITH_CONTEXT: AqlWithContextStrategy,
-        ExtractionMethod.PROMPT_EXPERIMENTAL: PromptExperimentalStrategy,
-    }
-
-    strategy_cls = strategy_map.get(method)
+    strategy_cls = _STRATEGY_MAP.get(method)
     if strategy_cls is None:
         raise ValueError(f"Unrecognised ExtractionMethod: {method!r}")
 
-    scraper = AgentQlJobScraper(browser, strategy_cls())
-    return scraper.scrape(url)
+    return AgentQlJobScraper(browser, strategy_cls()).scrape(url)

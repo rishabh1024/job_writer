@@ -110,8 +110,7 @@ class TestJobUrls:
 
 class TestTotalContentFields:
     def test_matches_job_extract_content_fields(self) -> None:
-        j = JobExtract(url="x", method=ExtractionMethod.AQL_STRUCTURED)
-        assert _TOTAL_CONTENT_FIELDS == len(j._CONTENT_FIELDS)
+        assert _TOTAL_CONTENT_FIELDS == len(JobExtract.CONTENT_FIELDS)
 
     def test_value_is_12(self) -> None:
         assert _TOTAL_CONTENT_FIELDS == 12

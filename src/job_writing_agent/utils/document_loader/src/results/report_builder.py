@@ -15,7 +15,7 @@ Generates a human-readable ``.md`` file structured as:
 
     ### Strategy: AQL Structured (baseline)
     - **Status**: OK
-    - **Fields extracted**: 8 / 8
+    - **Fields extracted**: 9 / 12
     - **Scrape time**: 4 200 ms
     | Field | Value |
     |---|---|
@@ -40,25 +40,38 @@ in full — no truncation.
 
 from __future__ import annotations
 
-from pathlib import Path
+from collections import defaultdict
+from typing import TYPE_CHECKING
 
 from job_writing_agent.utils.app_log.logging_config import get_logger
 from job_writing_agent.utils.app_log.logging_decorators import log_execution
-from job_writing_agent.utils.document_loader.src.agentql_job_scraper import (
-    JobExtract,
+from job_writing_agent.utils.document_loader.src.strategies import (
+    AqlStructuredStrategy,
+    AqlWithContextStrategy,
+    PromptExperimentalStrategy,
 )
-from job_writing_agent.utils.document_loader.src.experiment_models import (
-    ExperimentReport,
-    ExperimentResult,
-)
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from job_writing_agent.utils.document_loader.src.agentql_job_scraper import (  # noqa: E501
+        JobExtract,
+    )
+    from job_writing_agent.utils.document_loader.src.experiment_models import (
+        ExperimentReport,
+        ExperimentResult,
+    )
 
 logger = get_logger(__name__)
 
-# Human-readable labels for every content field, in display order.
 _FIELD_LABELS: list[tuple[str, str]] = [
     ("job_title", "Job Title"),
     ("company_name", "Company"),
     ("job_location", "Location"),
+    ("employment_type", "Employment Type"),
+    ("salary_range", "Salary Range"),
+    ("remote_policy", "Remote Policy"),
+    ("application_deadline", "Application Deadline"),
     ("job_summary", "Job Summary"),
     ("responsibilities", "Responsibilities"),
     ("requirements", "Requirements"),
@@ -67,11 +80,6 @@ _FIELD_LABELS: list[tuple[str, str]] = [
 ]
 
 _TOTAL_FIELDS: int = len(_FIELD_LABELS)
-
-
-# ---------------------------------------------------------------------------
-# Private helpers — field rendering
-# ---------------------------------------------------------------------------
 
 
 def _render_field_value(value: object) -> str:
@@ -112,35 +120,24 @@ def _render_field_table(extract: JobExtract) -> str:
     return "\n".join(rows)
 
 
-# ---------------------------------------------------------------------------
-# Private helpers — section builders
-# ---------------------------------------------------------------------------
-
-
 def _render_strategy_section(result: ExperimentResult) -> str:
     """Render one ``### Strategy: ...`` section for a single trial.
 
     Args:
-        result: The ``ExperimentResult`` for this URL × strategy trial.
+        result: The ``ExperimentResult`` for this URL x strategy trial.
 
     Returns:
         Multi-line markdown string for this strategy section.
     """
-    from job_writing_agent.utils.document_loader.src.strategies import (
-        AqlStructuredStrategy,
-        AqlWithContextStrategy,
-        PromptExperimentalStrategy,
-    )
-
-    _STRATEGY_DESCRIPTIONS = {
+    strategy_descriptions = {
         "aql_structured": AqlStructuredStrategy().description,
         "aql_with_context": AqlWithContextStrategy().description,
         "prompt_experimental": PromptExperimentalStrategy().description,
     }
 
     method_label = str(result.method).replace("_", " ").title()
-    description = _STRATEGY_DESCRIPTIONS.get(
-        str(result.method), str(result.method)
+    description = strategy_descriptions.get(
+        str(result.method), str(result.method),
     )
 
     lines: list[str] = [
@@ -161,7 +158,7 @@ def _render_strategy_section(result: ExperimentResult) -> str:
 
     extract = result.extract
     completeness_pct = int(
-        (extract.populated_fields / _TOTAL_FIELDS) * 100
+        (extract.populated_fields / _TOTAL_FIELDS) * 100,
     )
     lines += [
         f"**Status**: OK  |  "
@@ -209,8 +206,6 @@ def _render_summary_table(report: ExperimentReport) -> str:
     Returns:
         Multi-line markdown string for the summary table.
     """
-    from collections import defaultdict
-
     stats: dict[str, dict] = defaultdict(
         lambda: {
             "trials": 0,
@@ -218,47 +213,43 @@ def _render_summary_table(report: ExperimentReport) -> str:
             "error": 0,
             "total_fields": 0,
             "total_time_ms": 0,
-        }
+        },
     )
 
     for result in report.results:
-        key = str(result.method)
-        stats[key]["trials"] += 1
+        method_key = str(result.method)
+        stats[method_key]["trials"] += 1
         if result.is_success:
-            stats[key]["success"] += 1
-            stats[key]["total_fields"] += result.extract.populated_fields
-            stats[key]["total_time_ms"] += result.extract.scrape_time_ms
+            stats[method_key]["success"] += 1
+            stats[method_key]["total_fields"] += result.extract.populated_fields
+            stats[method_key]["total_time_ms"] += result.extract.scrape_time_ms
         else:
-            stats[key]["error"] += 1
+            stats[method_key]["error"] += 1
 
     rows = [
         "| Strategy | Trials | Success | Errors |"
         " Avg Completeness | Avg Time (ms) |",
         "|---|---|---|---|---|---|",
     ]
-    for method_key, s in stats.items():
+    for method_key, method_stats in stats.items():
         label = method_key.replace("_", " ").title()
-        success = s["success"]
-        avg_fields = (
-            f"{s['total_fields'] / success / _TOTAL_FIELDS * 100:.0f}%"
-            if success
+        success_count = method_stats["success"]
+        avg_completeness = (
+            f"{method_stats['total_fields'] / success_count / _TOTAL_FIELDS * 100:.0f}%"  # noqa: E501
+            if success_count
             else "—"
         )
-        avg_time = (
-            f"{s['total_time_ms'] // success:,}"
-            if success
+        avg_time_ms = (
+            f"{method_stats['total_time_ms'] // success_count:,}"
+            if success_count
             else "—"
         )
         rows.append(
-            f"| {label} | {s['trials']} | {success} | {s['error']} |"
-            f" {avg_fields} | {avg_time} |"
+            f"| {label} | {method_stats['trials']} | {success_count}"
+            f" | {method_stats['error']} |"
+            f" {avg_completeness} | {avg_time_ms} |",
         )
     return "\n".join(rows)
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
 
 
 @log_execution
