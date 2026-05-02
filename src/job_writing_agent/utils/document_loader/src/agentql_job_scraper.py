@@ -105,15 +105,11 @@ class JobExtract:
         job_title: Title of the role.
         company_name: Hiring company.
         job_location: Office / city / remote label.
-        employment_type: Full-time, part-time, contract, or similar label.
-        salary_range: Compensation or pay range.
         job_summary: Introductory paragraph or overview.
         responsibilities: List of role responsibilities.
         requirements: Mandatory qualifications.
         preferred_qualifications: Nice-to-have qualifications.
         benefits: Perks and benefits listed.
-        application_deadline: Closing date or apply-by date.
-        remote_policy: Remote, hybrid, or on-site work arrangement.
         scrape_time_ms: Wall-clock time for the extraction in milliseconds.
         populated_fields: Count of non-None content fields extracted.
         has_error: Whether extraction raised an exception.
@@ -126,15 +122,11 @@ class JobExtract:
         "job_title",
         "company_name",
         "job_location",
-        "employment_type",
-        "salary_range",
         "job_summary",
         "responsibilities",
         "requirements",
         "preferred_qualifications",
         "benefits",
-        "application_deadline",
-        "remote_policy",
     )
 
     url: str
@@ -143,15 +135,11 @@ class JobExtract:
     job_title: str | None = None
     company_name: str | None = None
     job_location: str | None = None
-    employment_type: str | None = None
-    salary_range: str | None = None
     job_summary: str | None = None
     responsibilities: list[str] = field(default_factory=list)
     requirements: list[str] = field(default_factory=list)
     preferred_qualifications: list[str] = field(default_factory=list)
     benefits: list[str] = field(default_factory=list)
-    application_deadline: str | None = None
-    remote_policy: str | None = None
 
     scrape_time_ms: int = 0
     populated_fields: int = 0
@@ -244,10 +232,6 @@ def _flatten_context_response(agentql_response: dict) -> dict:
         "job_title": payload.get("job_title"),
         "company_name": payload.get("company_name"),
         "job_location": payload.get("job_location"),
-        "employment_type": payload.get("employment_type"),
-        "salary_range": payload.get("salary_range"),
-        "remote_policy": payload.get("remote_policy"),
-        "application_deadline": payload.get("application_deadline"),
         "job_summary": section.get("job_summary")
         or payload.get("job_summary"),
         "responsibilities": section.get("responsibilities")
@@ -293,15 +277,11 @@ def _parse_aql_response(
         job_title=flat.get("job_title"),
         company_name=flat.get("company_name"),
         job_location=flat.get("job_location"),
-        employment_type=flat.get("employment_type"),
-        salary_range=flat.get("salary_range"),
         job_summary=flat.get("job_summary"),
         responsibilities=flat.get("responsibilities") or [],
         requirements=flat.get("requirements") or [],
         preferred_qualifications=flat.get("preferred_qualifications") or [],
         benefits=flat.get("benefits") or [],
-        application_deadline=flat.get("application_deadline"),
-        remote_policy=flat.get("remote_policy"),
     )
     extract.populated_fields = _count_populated_fields(extract)
     return extract
