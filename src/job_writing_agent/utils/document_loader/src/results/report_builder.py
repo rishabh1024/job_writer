@@ -40,17 +40,27 @@ in full — no truncation.
 
 from __future__ import annotations
 
-from pathlib import Path
+from collections import defaultdict
+from typing import TYPE_CHECKING
 
 from job_writing_agent.utils.app_log.logging_config import get_logger
 from job_writing_agent.utils.app_log.logging_decorators import log_execution
-from job_writing_agent.utils.document_loader.src.agentql_job_scraper import (
-    JobExtract,
+from job_writing_agent.utils.document_loader.src.strategies import (
+    AqlStructuredStrategy,
+    AqlWithContextStrategy,
+    PromptExperimentalStrategy,
 )
-from job_writing_agent.utils.document_loader.src.experiment_models import (
-    ExperimentReport,
-    ExperimentResult,
-)
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from job_writing_agent.utils.document_loader.src.agentql_job_scraper import (  # noqa: E501
+        JobExtract,
+    )
+    from job_writing_agent.utils.document_loader.src.experiment_models import (
+        ExperimentReport,
+        ExperimentResult,
+    )
 
 logger = get_logger(__name__)
 
@@ -125,26 +135,20 @@ def _render_strategy_section(result: ExperimentResult) -> str:
     """Render one ``### Strategy: ...`` section for a single trial.
 
     Args:
-        result: The ``ExperimentResult`` for this URL × strategy trial.
+        result: The ``ExperimentResult`` for this URL x strategy trial.
 
     Returns:
         Multi-line markdown string for this strategy section.
     """
-    from job_writing_agent.utils.document_loader.src.strategies import (
-        AqlStructuredStrategy,
-        AqlWithContextStrategy,
-        PromptExperimentalStrategy,
-    )
-
-    _STRATEGY_DESCRIPTIONS = {
+    strategy_descriptions = {
         "aql_structured": AqlStructuredStrategy().description,
         "aql_with_context": AqlWithContextStrategy().description,
         "prompt_experimental": PromptExperimentalStrategy().description,
     }
 
     method_label = str(result.method).replace("_", " ").title()
-    description = _STRATEGY_DESCRIPTIONS.get(
-        str(result.method), str(result.method)
+    description = strategy_descriptions.get(
+        str(result.method), str(result.method),
     )
 
     lines: list[str] = [
@@ -165,7 +169,7 @@ def _render_strategy_section(result: ExperimentResult) -> str:
 
     extract = result.extract
     completeness_pct = int(
-        (extract.populated_fields / _TOTAL_FIELDS) * 100
+        (extract.populated_fields / _TOTAL_FIELDS) * 100,
     )
     lines += [
         f"**Status**: OK  |  "
@@ -213,8 +217,6 @@ def _render_summary_table(report: ExperimentReport) -> str:
     Returns:
         Multi-line markdown string for the summary table.
     """
-    from collections import defaultdict
-
     stats: dict[str, dict] = defaultdict(
         lambda: {
             "trials": 0,
@@ -222,7 +224,7 @@ def _render_summary_table(report: ExperimentReport) -> str:
             "error": 0,
             "total_fields": 0,
             "total_time_ms": 0,
-        }
+        },
     )
 
     for result in report.results:
@@ -255,7 +257,7 @@ def _render_summary_table(report: ExperimentReport) -> str:
         )
         rows.append(
             f"| {label} | {s['trials']} | {success} | {s['error']} |"
-            f" {avg_fields} | {avg_time} |"
+            f" {avg_fields} | {avg_time} |",
         )
     return "\n".join(rows)
 

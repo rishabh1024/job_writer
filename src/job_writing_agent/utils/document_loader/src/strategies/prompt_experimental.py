@@ -8,15 +8,18 @@ carefully authored AQL query.
 
 from __future__ import annotations
 
-from agentql.ext.playwright.sync_api import Page
+from typing import TYPE_CHECKING
 
-from job_writing_agent.utils.document_loader.src.agentql_job_scraper import (
-    ExtractionMethod,
+from job_writing_agent.utils.document_loader.src._constants import (
     JOB_DESCRIPTION_PROMPT,
+    ExtractionMethod,
 )
 from job_writing_agent.utils.document_loader.src.strategies.base import (
     BaseScraperStrategy,
 )
+
+if TYPE_CHECKING:
+    from agentql.ext.playwright.sync_api import Page
 
 
 class PromptExperimentalStrategy(BaseScraperStrategy):

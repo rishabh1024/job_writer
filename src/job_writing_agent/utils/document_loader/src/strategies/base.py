@@ -13,12 +13,14 @@ necessary.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
-from agentql.ext.playwright.sync_api import Page
+if TYPE_CHECKING:
+    from agentql.ext.playwright.sync_api import Page
 
-from job_writing_agent.utils.document_loader.src.agentql_job_scraper import (
-    ExtractionMethod,
-)
+    from job_writing_agent.utils.document_loader.src._constants import (
+        ExtractionMethod,
+    )
 
 
 class BaseScraperStrategy(ABC):

@@ -1,4 +1,4 @@
-"""AgentQL job-description scraper experiment.
+r"""AgentQL job-description scraper experiment.
 
 Runs three extraction strategies on 10 diverse job-posting URLs (30 trials):
 
@@ -25,10 +25,10 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import Browser, sync_playwright
 
 from job_writing_agent.utils.app_log.logging_config import (
     LoggingManager,
@@ -116,7 +116,7 @@ logger = get_logger(__name__)
 
 
 def _run_single_trial(
-    browser,
+    browser: Browser,
     url: str,
     strategy: BaseScraperStrategy,
 ) -> ExperimentResult:
@@ -145,12 +145,11 @@ def _run_single_trial(
             is_success=True,
         )
     except ScraperError as exc:
-        logger.error(
+        logger.exception(
             "ScraperError for %s via %s: %s",
             url,
             method,
             exc.reason,
-            exc_info=True,
         )
         return ExperimentResult(
             url=url,
@@ -164,14 +163,8 @@ def _run_single_trial(
             is_success=False,
             error_message=str(exc),
         )
-    except Exception as exc:  # noqa: BLE001
-        logger.error(
-            "Unexpected error for %s via %s: %s",
-            url,
-            method,
-            exc,
-            exc_info=True,
-        )
+    except Exception as exc:
+        logger.exception("Unexpected error for %s via %s", url, method)
         return ExperimentResult(
             url=url,
             method=method,
@@ -250,7 +243,7 @@ def _serialize_report(report: ExperimentReport) -> dict:
                 "is_success": result.is_success,
                 "error_message": result.error_message,
                 "extract": extract_dict,
-            }
+            },
         )
     return {
         "run_id": report.run_id,
@@ -324,7 +317,7 @@ def _print_summary_table(report: ExperimentReport) -> None:
     print(
         f"Experiment run : {report.run_id}  |  "
         f"Trials: {report.total_trials}  |  "
-        f"Successful: {report.successful_trials}"
+        f"Successful: {report.successful_trials}",
     )
     print(sep)
     print(header)
@@ -344,7 +337,7 @@ def _print_summary_table(report: ExperimentReport) -> None:
         )
         row = (
             f"{_truncate(result.url, _COL_URL):<{_COL_URL}} | "
-            f"{str(result.method):<{_COL_STRATEGY}} | "
+            f"{result.method!s:<{_COL_STRATEGY}} | "
             f"{fields_label:<{_COL_FIELDS}} | "
             f"{time_label:<{_COL_TIME}} | "
             f"{status:<{_COL_STATUS}}"
@@ -373,7 +366,7 @@ def run_experiment(job_urls: list[str]) -> ExperimentReport:
     Returns:
         A completed ``ExperimentReport`` with results for every trial.
     """
-    run_id = datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    run_id = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S")
     strategies: list[BaseScraperStrategy] = [
         AqlStructuredStrategy(),
         AqlWithContextStrategy(),
@@ -428,7 +421,7 @@ def run_experiment(job_urls: list[str]) -> ExperimentReport:
 
 def main() -> None:
     """Configure logging, run the experiment, persist results, print table."""
-    run_id = datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    run_id = datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S")
     log_path = _build_log_path(run_id)
     log_path.parent.mkdir(parents=True, exist_ok=True)
 

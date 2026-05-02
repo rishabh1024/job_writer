@@ -356,11 +356,9 @@ class TestJobExtractDefaults:
         assert j.error_message is None
 
     def test_content_fields_covers_12(self) -> None:
-        j = JobExtract(url="x", method=ExtractionMethod.AQL_STRUCTURED)
-        assert len(j._CONTENT_FIELDS) == 12
+        assert len(JobExtract.CONTENT_FIELDS) == 12
 
     def test_content_fields_match_expected_set(self) -> None:
-        j = JobExtract(url="x", method=ExtractionMethod.AQL_STRUCTURED)
         expected = {
             "job_title",
             "company_name",
@@ -375,7 +373,7 @@ class TestJobExtractDefaults:
             "application_deadline",
             "remote_policy",
         }
-        assert set(j._CONTENT_FIELDS) == expected
+        assert set(JobExtract.CONTENT_FIELDS) == expected
 
 
 # ---------------------------------------------------------------------------
