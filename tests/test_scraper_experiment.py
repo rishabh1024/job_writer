@@ -9,7 +9,7 @@ All tests run without a browser or an AgentQL API key.  They cover:
 - ExperimentResult / ExperimentReport construction (via experiment_models)
 - _serialize_report correctness and JSON round-trip
 - save_json_report file I/O
-- Presence of all three strategies in run_experiment source
+- Use of the single context-enriched strategy in run_experiment
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ def sample_report() -> ExperimentReport:
     )
     extract_fail = JobExtract(
         url="https://example.com/job/2",
-        method=ExtractionMethod.AQL_STRUCTURED,
+        method=ExtractionMethod.AQL_WITH_CONTEXT,
         has_error=True,
         error_message="Navigation failed: timeout",
     )
@@ -77,7 +77,7 @@ def sample_report() -> ExperimentReport:
             ),
             ExperimentResult(
                 url=extract_fail.url,
-                method=ExtractionMethod.AQL_STRUCTURED,
+                method=ExtractionMethod.AQL_WITH_CONTEXT,
                 extract=extract_fail,
                 is_success=False,
                 error_message="Navigation failed: timeout",
@@ -113,7 +113,7 @@ class TestTotalContentFields:
         assert _TOTAL_CONTENT_FIELDS == len(JobExtract.CONTENT_FIELDS)
 
     def test_value_is_12(self) -> None:
-        assert _TOTAL_CONTENT_FIELDS == 12
+        assert _TOTAL_CONTENT_FIELDS == 8
 
 
 # ---------------------------------------------------------------------------
@@ -254,11 +254,9 @@ class TestSaveJsonReport:
 
 
 class TestRunExperimentSource:
-    def test_all_three_strategies_present(self) -> None:
+    def test_only_context_strategy_present(self) -> None:
         src = inspect.getsource(run_experiment)
-        assert "AqlStructuredStrategy" in src
         assert "AqlWithContextStrategy" in src
-        assert "PromptExperimentalStrategy" in src
 
     def test_headless_true(self) -> None:
         assert "headless=True" in inspect.getsource(run_experiment)
