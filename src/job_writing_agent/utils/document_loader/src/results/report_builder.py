@@ -64,7 +64,6 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-# Human-readable labels for every content field, in display order.
 _FIELD_LABELS: list[tuple[str, str]] = [
     ("job_title", "Job Title"),
     ("company_name", "Company"),
@@ -81,11 +80,6 @@ _FIELD_LABELS: list[tuple[str, str]] = [
 ]
 
 _TOTAL_FIELDS: int = len(_FIELD_LABELS)
-
-
-# ---------------------------------------------------------------------------
-# Private helpers — field rendering
-# ---------------------------------------------------------------------------
 
 
 def _render_field_value(value: object) -> str:
@@ -124,11 +118,6 @@ def _render_field_table(extract: JobExtract) -> str:
         value = getattr(extract, attr)
         rows.append(f"| **{label}** | {_render_field_value(value)} |")
     return "\n".join(rows)
-
-
-# ---------------------------------------------------------------------------
-# Private helpers — section builders
-# ---------------------------------------------------------------------------
 
 
 def _render_strategy_section(result: ExperimentResult) -> str:
@@ -260,11 +249,6 @@ def _render_summary_table(report: ExperimentReport) -> str:
             f" {avg_fields} | {avg_time} |",
         )
     return "\n".join(rows)
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
 
 
 @log_execution

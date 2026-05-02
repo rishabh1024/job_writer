@@ -54,14 +54,8 @@ from job_writing_agent.utils.document_loader.src.strategies import (
     PromptExperimentalStrategy,
 )
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
 RESULTS_DIR: Path = Path(__file__).parent / "experiment_results"
 
-# 10 job postings across diverse job boards:
-#   Greenhouse, Workday, Lever, Ashby, SmartRecruiters, direct company pages
 JOB_URLS: list[str] = [
     # Greenhouse
     "https://job-boards.greenhouse.io/ocrolusinc/jobs/5837904004",
@@ -97,10 +91,8 @@ JOB_URLS: list[str] = [
     "https://job-boards.greenhouse.io/stripe/jobs/6309270",
 ]
 
-# Number of tracked content fields in JobExtract.
 _TOTAL_CONTENT_FIELDS: int = 12
 
-# Console table column widths
 _COL_URL: int = 55
 _COL_STRATEGY: int = 24
 _COL_FIELDS: int = 10
@@ -108,11 +100,6 @@ _COL_TIME: int = 10
 _COL_STATUS: int = 8
 
 logger = get_logger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Private helpers — trial execution
-# ---------------------------------------------------------------------------
 
 
 def _run_single_trial(
@@ -177,11 +164,6 @@ def _run_single_trial(
             is_success=False,
             error_message=str(exc),
         )
-
-
-# ---------------------------------------------------------------------------
-# Private helpers — persistence
-# ---------------------------------------------------------------------------
 
 
 def _build_json_path(run_id: str) -> Path:
@@ -268,11 +250,6 @@ def save_json_report(report: ExperimentReport, output_path: Path) -> None:
     logger.info("JSON results saved to %s", output_path)
 
 
-# ---------------------------------------------------------------------------
-# Private helpers — console display
-# ---------------------------------------------------------------------------
-
-
 def _truncate(text: str, max_len: int) -> str:
     """Return ``text`` truncated to ``max_len`` chars with an ellipsis.
 
@@ -348,11 +325,6 @@ def _print_summary_table(report: ExperimentReport) -> None:
     print()
 
 
-# ---------------------------------------------------------------------------
-# Orchestration
-# ---------------------------------------------------------------------------
-
-
 @log_execution
 def run_experiment(job_urls: list[str]) -> ExperimentReport:
     """Run all three strategies against every URL.
@@ -412,11 +384,6 @@ def run_experiment(job_urls: list[str]) -> ExperimentReport:
         total_trials,
     )
     return report
-
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 
 
 def main() -> None:

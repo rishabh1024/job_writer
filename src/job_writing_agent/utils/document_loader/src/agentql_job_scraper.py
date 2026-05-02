@@ -68,17 +68,8 @@ __all__ = [
 
 logger = get_logger(__name__)
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
 PAGE_TIMEOUT_MS: int = 30_000
 SLOW_RESPONSE_THRESHOLD_S: float = 15.0
-
-
-# ---------------------------------------------------------------------------
-# Data models
-# ---------------------------------------------------------------------------
 
 
 class ScraperError(Exception):
@@ -123,11 +114,10 @@ class JobExtract:
         populated_fields: Count of non-None content fields extracted.
         has_error: Whether extraction raised an exception.
         error_message: Exception message when ``has_error`` is ``True``.
+        CONTENT_FIELDS: Class-level tuple of every tracked content field name.
+            Declared as ``ClassVar`` so it is not treated as a dataclass field.
     """
 
-    # Public class-level tuple listing every tracked content field name.
-    # Declared as ClassVar so it is not treated as a dataclass field and
-    # can be accessed without SLF001 violations.
     CONTENT_FIELDS: ClassVar[tuple[str, ...]] = (
         "job_title",
         "company_name",
@@ -163,11 +153,6 @@ class JobExtract:
     populated_fields: int = 0
     has_error: bool = False
     error_message: str | None = None
-
-
-# ---------------------------------------------------------------------------
-# Private helpers
-# ---------------------------------------------------------------------------
 
 
 def _navigate_to_url(page: Page, url: str) -> None:
@@ -319,11 +304,6 @@ def _warn_if_slow(
         )
 
 
-# ---------------------------------------------------------------------------
-# AgentQlJobScraper — strategy-pattern entry point
-# ---------------------------------------------------------------------------
-
-
 class AgentQlJobScraper:
     """Scrapes a job-posting URL using an interchangeable extraction strategy.
 
@@ -412,10 +392,6 @@ class AgentQlJobScraper:
             )
             return extract
 
-
-# ---------------------------------------------------------------------------
-# Backward-compatible function shim
-# ---------------------------------------------------------------------------
 
 _STRATEGY_MAP = {
     ExtractionMethod.AQL_STRUCTURED: AqlStructuredStrategy,
