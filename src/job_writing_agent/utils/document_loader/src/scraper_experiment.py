@@ -1,19 +1,3 @@
-r"""AgentQL job-description scraper experiment.
-
-Runs the context-enriched AQL extraction strategy on diverse job-posting URLs.
-
-Usage (PowerShell)::
-
-    cd src\\job_writing_agent\\utils\\document_loader\\src
-    python scraper_experiment.py
-
-Output files are written to the ``experiment_results/`` directory:
-
-* ``results_<timestamp>.json``    — full structured extraction data
-* ``report_<timestamp>.md``       — human-readable per-URL per-strategy report
-* ``experiment_<timestamp>.log``  — timestamped log of every scrape event
-"""
-
 from __future__ import annotations
 
 import json
@@ -28,7 +12,6 @@ from job_writing_agent.utils.app_log.logging_config import (
     LoggingManager,
     get_logger,
 )
-from job_writing_agent.utils.app_log.logging_decorators import log_execution
 from job_writing_agent.utils.document_loader.src.agentql_job_scraper import (
     AgentQlJobScraper,
     JobExtract,
@@ -49,38 +32,10 @@ from job_writing_agent.utils.document_loader.src.strategies import (
 RESULTS_DIR: Path = Path(__file__).parent / "experiment_results"
 
 JOB_URLS: list[str] = [
-    # Greenhouse
-    "https://job-boards.greenhouse.io/ocrolusinc/jobs/5837904004",
-    # Lever
-    "https://jobs.lever.co/openai/a1b2c3d4-0001-0001-0001-000000000001",
-    # Workday / Amazon Jobs
-    (
-        "https://amazon.jobs/en/jobs/2972591/"
-        "software-development-engineer"
-    ),
-    # LinkedIn (public job page)
-    "https://www.linkedin.com/jobs/view/software-engineer-at-google-3912345678",
-    # Ashby
-    "https://jobs.ashbyhq.com/anthropic/software-engineer",
-    # SmartRecruiters
-    (
-        "https://jobs.smartrecruiters.com/Salesforce/"
-        "software-engineer-backend"
-    ),
-    # Microsoft careers
-    (
-        "https://careers.microsoft.com/us/en/job/1797500/"
-        "Software-Engineer"
-    ),
-    # Meta careers
-    "https://www.metacareers.com/jobs/software-engineer-infrastructure",
-    # iCIMS-hosted board
-    (
-        "https://careers-proofpoint.icims.com/jobs/5001/"
-        "senior-software-engineer/job"
-    ),
-    # Greenhouse (second company)
-    "https://job-boards.greenhouse.io/stripe/jobs/6309270",
+    "https://autodesk.wd1.myworkdayjobs.com/en-US/Ext/job/Pune%2C-IND/Senior-Software-Engineer_25WD93636-1?src=JB-10065&source=LinkedIn",
+    "https://paypal.wd1.myworkdayjobs.com/en-US/jobs/job/Bangalore-Karnataka-India/Senior-Software-Engineer---Backend--Java-_R0134858",
+    "https://fox.wd1.myworkdayjobs.com/en-US/Domestic/job/IND-KA-Bengaluru/Senior-Software-Development-Engineer--Backend_R50031537",
+    "https://altera.wd1.myworkdayjobs.com/en-US/altera/job/Bengaluru-Karnataka-India/FPGA-IP-Software-Development-Engineer_R01384-1",
 ]
 
 # Number of tracked content fields in JobExtract.
@@ -93,6 +48,19 @@ _COL_TIME: int = 10
 _COL_STATUS: int = 8
 
 logger = get_logger(__name__)
+
+_NOISY_LOGGERS: tuple[str, ...] = (
+    "agentql",
+    "urllib3",
+    "playwright",
+    "job_writing_agent.utils.app_log.logging_decorators",
+)
+
+
+def _suppress_noisy_loggers() -> None:
+    """Keep third-party scraper traces out of normal experiment output."""
+    for logger_name in _NOISY_LOGGERS:
+        logging.getLogger(logger_name).setLevel(logging.WARNING)
 
 
 def _run_single_trial(
@@ -125,7 +93,7 @@ def _run_single_trial(
             is_success=True,
         )
     except ScraperError as exc:
-        logger.exception(
+        logger.error(
             "ScraperError for %s via %s: %s",
             url,
             method,
@@ -228,7 +196,6 @@ def _serialize_report(report: ExperimentReport) -> dict:
     }
 
 
-@log_execution
 def save_json_report(report: ExperimentReport, output_path: Path) -> None:
     """Write the experiment report to a JSON file.
 
@@ -240,7 +207,7 @@ def save_json_report(report: ExperimentReport, output_path: Path) -> None:
     payload = _serialize_report(report)
     with output_path.open("w", encoding="utf-8") as json_file:
         json.dump(payload, json_file, indent=2, ensure_ascii=False)
-    logger.info("JSON results saved to %s", output_path)
+    logger.debug("JSON results saved to %s", output_path)
 
 
 def _truncate(text: str, max_len: int) -> str:
@@ -316,7 +283,6 @@ def _print_summary_table(report: ExperimentReport) -> None:
     print()
 
 
-@log_execution
 def run_experiment(job_urls: list[str]) -> ExperimentReport:
     """Run the context-enriched AQL strategy against every URL.
 
@@ -336,7 +302,7 @@ def run_experiment(job_urls: list[str]) -> ExperimentReport:
     total_trials = len(job_urls) * len(strategies)
     results: list[ExperimentResult] = []
 
-    logger.info(
+    logger.debug(
         "Experiment started: run_id=%s urls=%d strategies=%d trials=%d",
         run_id,
         len(job_urls),
@@ -349,7 +315,7 @@ def run_experiment(job_urls: list[str]) -> ExperimentReport:
         try:
             for url in job_urls:
                 for strategy in strategies:
-                    logger.info(
+                    logger.debug(
                         "Running trial: url=%s strategy=%s",
                         url,
                         strategy.method_name,
@@ -366,7 +332,7 @@ def run_experiment(job_urls: list[str]) -> ExperimentReport:
         successful_trials=successful,
         results=results,
     )
-    logger.info(
+    logger.debug(
         "Experiment finished: run_id=%s successful=%d/%d",
         run_id,
         successful,
@@ -382,11 +348,12 @@ def main() -> None:
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
     LoggingManager().configure_logging(
-        log_level=logging.DEBUG,
+        log_level=logging.WARNING,
         log_file=log_path,
     )
+    _suppress_noisy_loggers()
 
-    logger.info("=== AgentQL Job Scraper Experiment ===")
+    logger.debug("=== AgentQL Job Scraper Experiment ===")
 
     report = run_experiment(JOB_URLS)
 

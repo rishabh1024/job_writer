@@ -38,7 +38,6 @@ from collections import defaultdict
 from typing import TYPE_CHECKING
 
 from job_writing_agent.utils.app_log.logging_config import get_logger
-from job_writing_agent.utils.app_log.logging_decorators import log_execution
 from job_writing_agent.utils.document_loader.src.strategies import (
     AqlWithContextStrategy,
 )
@@ -238,7 +237,6 @@ def _render_summary_table(report: ExperimentReport) -> str:
     return "\n".join(rows)
 
 
-@log_execution
 def build_markdown_report(report: ExperimentReport) -> str:
     """Render a complete markdown experiment report as a string.
 
@@ -280,7 +278,6 @@ def build_markdown_report(report: ExperimentReport) -> str:
     return "\n".join(lines)
 
 
-@log_execution
 def save_markdown_report(report: ExperimentReport, output_path: Path) -> None:
     """Write the markdown experiment report to a ``.md`` file.
 
@@ -293,4 +290,4 @@ def save_markdown_report(report: ExperimentReport, output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     content = build_markdown_report(report)
     output_path.write_text(content, encoding="utf-8")
-    logger.info("Markdown report saved to %s", output_path)
+    logger.debug("Markdown report saved to %s", output_path)

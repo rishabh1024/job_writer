@@ -31,7 +31,6 @@ from typing import TYPE_CHECKING, ClassVar
 import agentql
 
 from job_writing_agent.utils.app_log.logging_config import get_logger
-from job_writing_agent.utils.app_log.logging_decorators import log_execution
 from job_writing_agent.utils.document_loader.src._constants import (
     JOB_DESCRIPTION_QUERY_WITH_CONTEXT,
     ExtractionMethod,
@@ -289,14 +288,14 @@ def _count_populated_fields(extract: JobExtract) -> int:
 
 
 def _warn_if_partial(extract: JobExtract, total_fields: int) -> None:
-    """Emit a WARNING when fewer than half of content fields were populated.
+    """Log debug details when fewer than half of content fields were populated.
 
     Args:
         extract: Completed ``JobExtract``.
         total_fields: Total number of tracked content fields.
     """
     if extract.populated_fields < total_fields // 2:
-        logger.warning(
+        logger.debug(
             "Partial extraction for %s via %s: only %d/%d fields populated",
             extract.url,
             extract.method,
@@ -310,7 +309,7 @@ def _warn_if_slow(
     url: str,
     method: ExtractionMethod,
 ) -> None:
-    """Emit a WARNING when a scrape exceeds the slow-response threshold.
+    """Log debug details when a scrape exceeds the slow-response threshold.
 
     Args:
         elapsed_s: Total elapsed seconds for the scrape.
@@ -318,7 +317,7 @@ def _warn_if_slow(
         method: Extraction method used.
     """
     if elapsed_s > SLOW_RESPONSE_THRESHOLD_S:
-        logger.warning(
+        logger.debug(
             "Slow response for %s via %s: %.1fs (threshold %.0fs)",
             url,
             method,
@@ -359,7 +358,6 @@ class AgentQlJobScraper:
         """
         return self._strategy
 
-    @log_execution
     def scrape(self, url: str) -> JobExtract:
         """Extract job-description data from ``url`` using the active strategy.
 
@@ -378,7 +376,7 @@ class AgentQlJobScraper:
                 unexpected exception.
         """
         method = self._strategy.method_name
-        logger.info("Starting extraction: url=%s strategy=%s", url, method)
+        logger.debug("Starting extraction: url=%s strategy=%s", url, method)
         start_time = time.monotonic()
         total_fields = len(JobExtract.CONTENT_FIELDS)
 
@@ -402,7 +400,7 @@ class AgentQlJobScraper:
             raise ScraperError(url, str(exc)) from exc
         else:
             page.close()
-            logger.info(
+            logger.debug(
                 "Extraction complete: url=%s strategy=%s "
                 "fields=%d/%d time=%dms",
                 url,
@@ -419,7 +417,6 @@ _STRATEGY_MAP = {
 }
 
 
-@log_execution
 def extract_job_data(
     browser: Browser,
     url: str,
