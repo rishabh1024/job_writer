@@ -6,6 +6,7 @@ Created on Mon Oct 23 16:49:52 2023
 
 # Legacy import (deprecated - use new classes instead)
 from .data_loading_workflow import data_loading_workflow
+from .graph_interrupt import GraphInterrupt
 
 # New data loading classes following SOLID principles
 from .resume_loader import ResumeLoader
@@ -20,6 +21,7 @@ from .selfconsistency import self_consistency_vote
 from .research_workflow import research_workflow
 
 __all__ = [
+    "GraphInterrupt",
     # New data loading classes
     "ResumeLoader",
     "JobDescriptionLoader",

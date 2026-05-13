@@ -63,3 +63,39 @@ class CompanyResearchDataSummarizationSchema(dspy.Signature):
     company_research_data_summary = dspy.OutputField(
         desc="This is summary of the company research data that will be used by a job application writer to assist the candidate in writing content supporting the job application. The summary should be relevant to the job application and the company.",
     )
+
+
+class CandidateJobFitAnalysis(dspy.Signature):
+    """Analyze how a candidate's resume aligns with a job description.
+
+    Identify matching qualifications, transferable skills, gaps, and key talking
+    points for application materials (cover letter, resume bullets, LinkedIn note).
+    """
+
+    resume_text = dspy.InputField(
+        desc="Full text of the candidate's resume including experience, skills, and education."
+    )
+    job_description = dspy.InputField(
+        desc="Full text of the job posting including requirements, responsibilities, and qualifications."
+    )
+    company_name = dspy.InputField(desc="Name of the company hiring for this role.")
+
+    # Outputs - structured for downstream content generation
+    matching_qualifications = dspy.OutputField(
+        desc="List of candidate qualifications that directly match job requirements."
+    )
+    transferable_skills = dspy.OutputField(
+        desc="Skills from the resume that transfer to this role even if not explicitly required."
+    )
+    experience_highlights = dspy.OutputField(
+        desc="2-3 specific experiences from the resume most relevant to this role with brief context."
+    )
+    potential_gaps = dspy.OutputField(
+        desc="Requirements from the job description the resume doesn't clearly address."
+    )
+    unique_value_proposition = dspy.OutputField(
+        desc="One sentence describing what makes this candidate stand out for this specific role."
+    )
+    talking_points = dspy.OutputField(
+        desc="3-5 key points to emphasize in cover letter or interview, formatted as a list."
+    )

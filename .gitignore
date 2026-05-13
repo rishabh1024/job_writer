@@ -1,63 +1,217 @@
-## Ignore runtime artifacts and local secrets inside the package
-# Patterns here are relative to the `src/` directory
+# ==============================================================================
+# Job Application Writer Agent - .gitignore
+# ==============================================================================
 
-# Environment / secret files
+# ------------------------------------------------------------------------------
+# Python
+# ------------------------------------------------------------------------------
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Virtual environments
+.env/
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+app_env/
+
+# ------------------------------------------------------------------------------
+# Environment Variables & Secrets
+# ------------------------------------------------------------------------------
 .env
-# Jupyter notebooks
-job_writing_agent/*.ipynb
+.env.*
+.docker_env
+job_writing_agent/.env
+job_writing_agent/.env.*
+src/job_writing_agent/.env
+src/job_writing_agent/.env.*
 
-# LangGraph runtime artifacts (pickles, stores, checkpoints)
+# ------------------------------------------------------------------------------
+# IDE & Editor Files
+# ------------------------------------------------------------------------------
+# VS Code
+.vscode/
+.vscode/*
+
+# Cursor AI
+.cursor/
+.cursor/*
+
+# PyCharm
+.idea/
+*.swp
+*.swo
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*~
+.*.swp
+.*.swo
+
+# ------------------------------------------------------------------------------
+# Project Build & Distribution
+# ------------------------------------------------------------------------------
+src/job_writing_agent.egg-info/
+pyrightconfig.json
+
+# ------------------------------------------------------------------------------
+# Runtime Artifacts & Logs
+# ------------------------------------------------------------------------------
+# Application logs
+*.log
+logs/
+job_writing_agent/logs/
+src/job_writing_agent/logs/
+.src/job_writing_agent/logs/*
+
+# LangGraph runtime artifacts
+.langgraph_api/
 job_writing_agent/.langgraph_api/
 
-# Logs
-job_writing_agent/logs/
-
-# Pickle / serialized data
+# Serialized data
+*.pkl
+*.pckl
+*.pickle
 job_writing_agent/**/*.pkl
 job_writing_agent/**/*.pckl
 job_writing_agent/**/*.pickle
 
-# Compiled Python files / caches
-job_writing_agent/**/__pycache__/
-job_writing_agent/**/*.py[cod]
-job_writing_agent/**/*.pyc
+# ------------------------------------------------------------------------------
+# Data & Database Files
+# ------------------------------------------------------------------------------
+# Database files
+*.sqlite3
+*.sqlite
+*.db
+*.bin
 
-# General patterns (repo-relative ones can still live here)
-*.ipynb
-*.pkl
-*.pckl
-*.pickle
-__pycache__/
-*.py[cod]
-*.log
+# ChromaDB
+chroma/
+demo_chroma_db/
 
-.vscode/*
-.cursor/*
-src/job_writing_agent.egg-info/*
-pyrightconfig.json
-app_env/*
-.docker_env
-requirements.txt
-.langgraph_api/*
-src/job_writing_agent/logs/*
-docker-compose.override.example.yml
-scripts/*
-logs/*
-
-# Binary files (PDFs, images, etc.)
+# ------------------------------------------------------------------------------
+# Binary & Media Files
+# ------------------------------------------------------------------------------
+# Documents
 *.pdf
-*.png
+*.doc
+*.docx
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+
+# Images
 *.jpg
 *.jpeg
+*.png
 *.gif
+*.bmp
+*.tiff
+*.ico
+*.svg
+
+# Archives
 *.zip
 *.tar
 *.gz
-.\resume.pdf
+*.bz2
+*.7z
+*.rar
 
-# Database files
-*.sqlite3
-*.db
-*.bin
-chroma/
-demo_chroma_db/
+# Audio/Video
+*.mp3
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.flv
+
+# ------------------------------------------------------------------------------
+# Jupyter Notebooks
+# ------------------------------------------------------------------------------
+*.ipynb
+job_writing_agent/*.ipynb
+.ipynb_checkpoints/
+
+# ------------------------------------------------------------------------------
+# Docker & Deployment
+# ------------------------------------------------------------------------------
+docker-compose.override.yml
+docker-compose.override.example.yml
+Dockerfile.local
+.dockerignore.local
+
+# ------------------------------------------------------------------------------
+# Documentation & Examples
+# ------------------------------------------------------------------------------
+DOCKERFILE_EXPLANATION.md
+DEPLOYMENT_GUIDE.md
+
+# ------------------------------------------------------------------------------
+# Temporary Files
+# ------------------------------------------------------------------------------
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# ------------------------------------------------------------------------------
+# Project-Specific Files
+# ------------------------------------------------------------------------------
+# Sample/test files
+resume.pdf
+test_resume.*

@@ -11,7 +11,9 @@ Workflow Structure:
 
 import logging
 
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from job_writing_agent.agents.nodes import (
     create_draft,
@@ -21,8 +23,8 @@ from job_writing_agent.agents.nodes import (
 )
 from job_writing_agent.classes import (
     DataLoadState,
+    NodeName,
     dataload_to_research_adapter,
-    node_name,
 )
 from job_writing_agent.nodes.data_loading_workflow import data_loading_workflow
 from job_writing_agent.nodes.research_workflow import research_workflow
@@ -34,7 +36,7 @@ def _route_after_load(state: DataLoadState) -> str:
     """
     Route based on next_node set by data loading subgraph.
 
-    The data loading subgraph sets next_node to either node_name.LOAD
+    The data loading subgraph sets next_node to either NodeName.LOAD
     (if validation fails) or NodeName.RESEARCH (if validation passes).
 
     Parameters
@@ -45,55 +47,65 @@ def _route_after_load(state: DataLoadState) -> str:
     Returns
     -------
     str
-        Next node name: node_name.LOAD or node_name.RESEARCH.
+        Next node name: NodeName.LOAD or NodeName.RESEARCH.
     """
-    next_node = state.get("next_node", node_name.RESEARCH)
+    next_node = getattr(state, "next_node", NodeName.RESEARCH)
     logger.info(f"Routing after load: {next_node}")
     return next_node
 
 
-"""
-Build and compile the job application workflow graph.
+def build_job_app_graph() -> CompiledStateGraph:
+    """
+    Build and compile the job application workflow graph.
 
-This function creates the graph structure independent of runtime inputs.
-Actual runtime values (resume, job description) come from the state
-passed during invocation.
+    This function creates the graph structure independent of runtime inputs.
+    Actual runtime values (resume, job description) come from the state
+    passed during invocation.
 
-"""
+    Returns
+    -------
+    CompiledStateGraph
+        Compiled LangGraph state machine ready for execution.
+    """
+    graph = StateGraph(DataLoadState)
 
-graph = StateGraph(DataLoadState)
+    # Add nodes
+    graph.add_node(NodeName.LOAD, data_loading_workflow)
+    graph.add_node(NodeName.RESEARCH_SUBGRAPH_ADAPTER, dataload_to_research_adapter)
+    graph.add_node(NodeName.RESEARCH, research_workflow)
+    graph.add_node(NodeName.CREATE_DRAFT, create_draft)
+    graph.add_node(NodeName.CRITIQUE, critique_draft)
+    graph.add_node(NodeName.HUMAN_APPROVAL, human_approval)
+    graph.add_node(NodeName.FINALIZE, finalize_document)
 
-# Add nodes
-graph.add_node(node_name.LOAD, data_loading_workflow)
-graph.add_node(
-    node_name.RESEARCH_SUBGRAPH_ADAPTER, dataload_to_research_adapter
-)
-graph.add_node(node_name.RESEARCH, research_workflow)
-graph.add_node(node_name.CREATE_DRAFT, create_draft)
-graph.add_node(node_name.CRITIQUE, critique_draft)
-graph.add_node(node_name.HUMAN_APPROVAL, human_approval)
-graph.add_node(node_name.FINALIZE, finalize_document)
+    # Set entry and exit
+    graph.set_entry_point(NodeName.LOAD)
+    graph.set_finish_point(NodeName.FINALIZE)
 
-# Set entry and exit
-graph.set_entry_point(node_name.LOAD)
-graph.set_finish_point(node_name.FINALIZE)
+    # Add conditional edge for routing after data loading
+    graph.add_conditional_edges(
+        NodeName.LOAD,
+        _route_after_load,
+        {
+            NodeName.LOAD: NodeName.LOAD,
+            NodeName.RESEARCH: NodeName.RESEARCH_SUBGRAPH_ADAPTER,
+        },
+    )
 
-# Add conditional edge for routing after data loading
-graph.add_conditional_edges(
-    node_name.LOAD,
-    _route_after_load,
-    {
-        node_name.LOAD: node_name.LOAD,
-        node_name.RESEARCH: node_name.RESEARCH_SUBGRAPH_ADAPTER,
-    },
-)
+    # Add sequential edges for main workflow
+    graph.add_edge(NodeName.RESEARCH_SUBGRAPH_ADAPTER, NodeName.RESEARCH)
+    graph.add_edge(NodeName.RESEARCH, NodeName.CREATE_DRAFT)
+    graph.add_edge(NodeName.CREATE_DRAFT, NodeName.CRITIQUE)
+    graph.add_edge(NodeName.CRITIQUE, NodeName.HUMAN_APPROVAL)
+    graph.add_edge(NodeName.HUMAN_APPROVAL, NodeName.FINALIZE)
 
-# Add sequential edges for main workflow
-graph.add_edge(node_name.RESEARCH_SUBGRAPH_ADAPTER, node_name.RESEARCH)
-graph.add_edge(node_name.RESEARCH, node_name.CREATE_DRAFT)
-graph.add_edge(node_name.CREATE_DRAFT, node_name.CRITIQUE)
-graph.add_edge(node_name.CRITIQUE, node_name.HUMAN_APPROVAL)
-graph.add_edge(node_name.HUMAN_APPROVAL, node_name.FINALIZE)
+    # Checkpointer required for interrupts and human-in-the-loop (state persisted per thread_id).
+    # MemorySaver for in-process/dev; LangGraph Remote API server can use SqliteSaver/Postgres via langgraph.json.
+    checkpointer = MemorySaver()
+    return graph.compile(
+        checkpointer=checkpointer, name="Job Application Workflow Graph"
+    )
+
 
 # Export at module level for LangGraph API deployment
-job_app_graph = graph.compile(name="Job Application Workflow")
+job_app_graph = build_job_app_graph()
