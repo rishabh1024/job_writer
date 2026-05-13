@@ -54,7 +54,10 @@ class JobWorkflow:
             f"content={self.content!r})"
         )
 
-    def _build_initial_workflow_state(self) -> DataLoadState:
+    def _get_run_name(self) -> str:
+        return f"JobAppWorkflow.{self.content}.{self.timestamp}"
+
+    def _get_initial_workflow_state(self) -> DataLoadState:
         """
         Get the initial application state for the workflow.
 
@@ -112,7 +115,7 @@ class JobWorkflow:
 
         return callbacks
 
-    def _build_runnable_config(self) -> RunnableConfig:
+    def _get_runnable_config(self) -> RunnableConfig:
         """
         Build RunnableConfig with LangSmith tracing metadata.
 
@@ -128,7 +131,7 @@ class JobWorkflow:
         return {
             "configurable": {"thread_id": self.thread_id},
             "callbacks": self._get_callbacks(),
-            "run_name": f"JobAppWorkflow.{self.content}.{self.timestamp}",
+            "run_name": self._get_run_name(),
             "metadata": {
                 "workflow": "job_application_writer",
                 "content_type": self.content,
@@ -149,35 +152,32 @@ class JobWorkflow:
         Returns
         -------
         Optional[Dict[str, Any]]
-            Final workflow state containing the generated application material
-            in the "output_data" field, or None if execution fails.
+            Final workflow state containing the final output from the graph in the "output_data" field, or None if execution fails.
         """
         from job_writing_agent.graph import job_app_graph
 
-        try:
-            compiled_graph = job_app_graph
-        except Exception as exc:
-            logger.error("Error compiling graph: %s", exc, exc_info=True)
-            return None
+        initial_workflow_state: DataLoadState = (
+            self._get_initial_workflow_state()
+        )
 
-        initial_workflow_state = self._build_initial_workflow_state()
-        run_name = f"JobAppWorkflow.{self.content}.{self.timestamp}"
-        config: RunnableConfig = self._build_runnable_config()
+        runnable_config: RunnableConfig = self._get_runnable_config()
 
         try:
             initial_workflow_state["current_node"] = node_name.LOAD
             logger.info(
-                "Starting workflow execution: %s (content_type=%s, session_id=%s)",
-                run_name,
+                "Starting workflow execution. Run Name: %s Content Type: %s, Session ID: %s)",
+                self._get_run_name(),
                 self.content,
                 self.thread_id,
             )
-            graph_output = await compiled_graph.ainvoke(
+            graph_output = await job_app_graph.ainvoke(
                 initial_workflow_state,
-                config=config,
+                config=runnable_config,
             )
             logger.info("Workflow execution completed successfully")
             return graph_output
-        except Exception as exc:
-            logger.error("Error running graph: %s", exc, exc_info=True)
-            return None
+        except Exception as e:
+            logger.exception("Error running graph: %s", e)
+            raise Exception(
+                f"Error running the workflow. Exited the graph with error: {e}"
+            ) from e

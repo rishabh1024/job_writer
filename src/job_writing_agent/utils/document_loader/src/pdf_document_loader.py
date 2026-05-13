@@ -12,6 +12,7 @@ from job_writing_agent.utils.document_loader.src.file_document_loader import (
 )
 from job_writing_agent.utils.document_loader.src.models import (
     DocumentValidation,
+    ErrorCode,
 )
 
 
@@ -36,30 +37,34 @@ class PDFDocumentLoader(FileDocumentLoader):
             return True
         return False
 
-    def validate_input_document_file(
+    def _validate_document_source(
         self, document_file: Path
     ) -> DocumentValidation:
         if not self._check_if_file_exists(document_file):
             return DocumentValidation(
                 is_input_valid=False,
-                error="File does not exist",
+                error_code=ErrorCode.PATH_DOES_NOT_EXIST,
+                message="File does not exist",
             )
 
         if not self._is_pdf_file(document_file):
             return DocumentValidation(
                 is_input_valid=False,
-                error="File is not a PDF",
+                error_code=ErrorCode.INVALID_DOCUMENT,
+                message="File is not a PDF",
             )
 
         if self._is_empty_pdf_file(document_file):
             return DocumentValidation(
                 is_input_valid=False,
-                error="File is empty",
+                error_code=ErrorCode.EMPTY_DOCUMENT,
+                message="File is empty",
             )
 
         return DocumentValidation(
             is_input_valid=True,
-            error=None,
+            error_code=ErrorCode.NONE,
+            message=None,
         )
 
     def load_document(self, document: Path) -> Document:
@@ -85,10 +90,13 @@ class PDFDocumentLoader(FileDocumentLoader):
             metadata=file_metadata,
         )
 
-    def validate_document(self, document: Document) -> DocumentValidation:
+    def _validate_output_document(
+        self, document: Document
+    ) -> DocumentValidation:
         return DocumentValidation(
             is_input_valid=True,
-            error=None,
+            error_code=ErrorCode.NONE,
+            message=None,
         )
 
     def generate_interrupt_to_user(self) -> str:
@@ -100,17 +108,3 @@ class PDFDocumentLoader(FileDocumentLoader):
             id="pdf_document_parse_error",
         )
         return cast(str, user_input)
-
-
-pdf_document_loader = PDFDocumentLoader()
-
-# result = pdf_document_loader.validate_input_document_file(
-#     Path("C:/Users/risha/Downloads/Rishabh_SDE_Resume_IN.pdf")
-# )
-
-document = pdf_document_loader.load_document(
-    Path("C:/Users/risha/Downloads/Rishabh_SDE_Resume_IN.pdf")
-)
-
-# print(result)
-print(document)

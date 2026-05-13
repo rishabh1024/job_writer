@@ -3,10 +3,12 @@ from enum import StrEnum
 
 
 class ErrorCode(StrEnum):
-    INVALID_INPUT = "InvalidInput"
-    URL_NOT_REACHABLE = "URLNotReachable"
-    EMPTY_DOC = "EmptyDocument"
+    PATH_DOES_NOT_EXIST = "FilePathDoesNotExist"
     INVALID_URL = "InvalidURL"
+    INVALID_FILE_PATH = "InvalidFilePath"
+    URL_NOT_REACHABLE = "URLNotReachable"
+    INVALID_DOCUMENT = "InvalidDocument"
+    EMPTY_DOCUMENT = "EmptyDocument"
     NONE = "None"
 
 
@@ -15,6 +17,7 @@ class DocumentValidation:
     is_input_valid: bool = field(default=True)
     error_code: ErrorCode | None = None
     message: str | None = None
+    metadata: dict[str, str] | None = None
 
 
 @dataclass
