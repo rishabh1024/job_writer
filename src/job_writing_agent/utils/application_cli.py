@@ -1,10 +1,12 @@
 import argparse
-import re
 import socket
 import tempfile
 from pathlib import Path
+from typing import Iterable
+import re
 
 import requests
+
 
 DEFAULT_MODEL = "allenai/olmo-3.1-32b-think:free"
 DEFAULT_CONTENT_TYPE = "cover_letter"
@@ -75,13 +77,14 @@ def download_google_docs(url: str, export_format: str = "txt") -> str:
             f"Supported formats: {list(GOOGLE_DOCS_EXPORT_FORMATS.keys())}"
         )
 
-    export_url = f"https://docs.google.com/document/d/{doc_id}/export?format={export_format}"
+    export_url = (
+        f"https://docs.google.com/document/d/{doc_id}/export?format={export_format}"
+    )
 
     try:
         response = requests.get(
             export_url, timeout=DEFAULT_TIMEOUT, allow_redirects=True
         )
-
         response.raise_for_status()
 
         # Create temporary file with appropriate extension
@@ -98,7 +101,7 @@ def download_google_docs(url: str, export_format: str = "txt") -> str:
         )
 
 
-def validate_file_input(path: str) -> str:
+def is_readable_file(path: str) -> str:
     """
     Validate that the file exists and has a supported extension, or download from Google Docs.
     Args:
@@ -149,67 +152,57 @@ def valid_temp(temp: str) -> float:
     return value
 
 
-def verify_input_url(webpage_url: str) -> str:
+def is_valid_url(
+    job_posting: str, allowed_statuses: Iterable[int] | None = None
+) -> str:
     """Validate URL is reachable. Raises ArgumentTypeError if invalid."""
-    allowed_statuses = range(200, 400)
+    if allowed_statuses is None:
+        allowed_statuses = range(200, 400)
 
     try:
         response = requests.get(
-            webpage_url,
-            timeout=DEFAULT_TIMEOUT,
-            allow_redirects=True,
+            job_posting, timeout=DEFAULT_TIMEOUT, allow_redirects=True
         )
-
-        response.raise_for_status()
-
         if response.status_code not in allowed_statuses:
             raise argparse.ArgumentTypeError(
                 f"URL returned status {response.status_code}"
             )
-
-        return webpage_url
-
+        return job_posting
     except socket.gaierror as e:
         raise argparse.ArgumentTypeError(f"Domain name resolution failed: {e}")
-
     except requests.exceptions.ConnectionError as e:
         # Check if this ConnectionError was caused by a NameResolutionError
         if "NameResolutionError" in str(e) or "Failed to resolve" in str(e):
             raise argparse.ArgumentTypeError(
-                f"ConnectionError. Domain name could not be resolved: {webpage_url}"
+                f"ConnectionError. Domain name could not be resolved: {job_posting}"
             )
         raise argparse.ArgumentTypeError(f"Connection failed: {e}")
-
     except requests.exceptions.Timeout as e:
         raise argparse.ArgumentTypeError(f"Request timed out: {e}")
-
     except requests.exceptions.InvalidURL as e:
         raise argparse.ArgumentTypeError(f"Invalid URL format: {e}")
-
     except requests.exceptions.RequestException as e:
         raise argparse.ArgumentTypeError(f"URL validation failed: {e}")
 
 
-def run_cli() -> argparse.Namespace:
+def handle_cli() -> argparse.Namespace:
     """
-    Command line interface for the application workflow.
-    Validate and return the command line arguments to initiate the workflow.
+    Parse and validate CLI arguments for job application generator.
+
     Returns:
-
+        Parsed command-line arguments namespace
     """
-
     parser = argparse.ArgumentParser(
         description="""Assist the candidate in writing content for
         job application such as answering to question in application
-        process and cover letters."""
+        process, cover letters and more."""
     )
-
     parser.add_argument(
         "-r",
         "--resume",
         required=True,
         metavar="resume",
-        type=validate_file_input,
+        type=is_readable_file,
         help="""
             Provide the path to the file containing the candidate's resume. \
             It can be a local file path or a Google Docs sharing URL.
@@ -222,7 +215,7 @@ def run_cli() -> argparse.Namespace:
         "--jd-source",
         required=True,
         metavar="jd_source",
-        type=verify_input_url,
+        type=is_valid_url,
         help="URL to job posting or paste raw text of job description text.",
     )
     parser.add_argument(
@@ -236,7 +229,7 @@ def run_cli() -> argparse.Namespace:
         "-m",
         "--model",
         default=DEFAULT_MODEL,
-        metavar="model_name",
+        metavar="model_nam",
         help=f"Model to use (default: {DEFAULT_MODEL}).",
     )
     parser.add_argument(
