@@ -9,36 +9,17 @@ job description files and URLs, extracting both the job posting text and company
 import logging
 from typing import Any, Awaitable, Callable, ClassVar, Optional, Tuple
 
-from deprecated import deprecated
 from langchain_core.documents import Document
 
-from job_writing_agent.utils.document_processing import parse_job_description
-from job_writing_agent.utils.logging.logging_decorators import (
-    log_async,
-    log_errors,
-)
+from job_writing_agent.utils.document_processing import get_job_description
 
 logger = logging.getLogger(__name__)
 
 
 class JobDescriptionLoader:
     """
-    Responsible for loading and parsing job description documents.
-
-    This class follows SOLID principles:
-    - Single Responsibility: Only handles job description parsing
-    - Dependency Inversion: Parser is injected for testability
-    - Open/Closed: Can extend with different parsers without modification
-    - Interface Segregation: Focused interface (only job description methods)
-
-    Example:
-        >>> loader = JobDescriptionLoader()
-        >>> job_text, company = await loader.load_job_description("https://example.com/job")
-        >>>
-        >>> # With custom parser for testing
-        >>> async def mock_parser(source):
-        ...     return Document(page_content="test", metadata={"company_name": "TestCo"})
-        >>> loader = JobDescriptionLoader(parser=mock_parser)
+    Responsible for loading and parsing job
+    description from website links or file uploads
     """
 
     company_name: ClassVar[str]
@@ -49,47 +30,27 @@ class JobDescriptionLoader:
     ):
         """
         Initialize JobDescriptionLoader with optional parser dependency injection.
-
-        Parameters
-        ----------
-        parser: Optional[Callable[[Any], Awaitable[Document]]]
-            Async function to parse job description from URL. Defaults to
-            `parse_job_description` from document_processing. Can be injected
-            for testing.
-
-            The parser should take a URL (str) and return an awaitable that
-            resolves to a Document with page_content (str) and metadata (dict).
         """
-        self._parser = parser or parse_job_description
+        self._parser = parser or get_job_description
 
-    @log_async
-    @log_errors
-    async def load_job_description(self, job_description_url: Any) -> Tuple[str, str]:
+    async def parse_job_description(
+        self, job_description_source: Any
+    ) -> Tuple[str, str]:
         """
-        Load a job description from a URL and return its text and company name.
+        Parse a job description and return its text and company name.
 
-        Callers (e.g. load_job_description_node) typically validate that the URL
-        is non-empty before calling. Company name is read from document metadata.
-
-        Parameters
-        ----------
-        job_description_url: Any
-            URL of the job posting (http:// or https://).
-
-        Returns
-        -------
-        Tuple[str, str]
-            (job_posting_text, company_name). Empty strings if not found.
-
-        Raises
-        ------
-        Exception
-            If parsing or fetching fails.
+        Extracts both the job posting text and company name from the document.
+        Company name is extracted from document metadata if available.
         """
 
-        logger.info("Loading job description from: %s", job_description_url)
+        logger.info("Parsing job description from: %s", job_description_source)
+        assert job_description_source is not None, (
+            "Job description source cannot be None"
+        )
 
-        job_description_document: Document = await self._parser(job_description_url)
+        job_description_document: Document = await self._parser(
+            job_description_source
+        )
 
         # Extract company name from metadata
         if hasattr(job_description_document, "metadata") and isinstance(
@@ -119,7 +80,32 @@ class JobDescriptionLoader:
 
         return job_posting_text, company_name
 
-    @log_async
+    async def _load_job_description(self, jd_source: Any) -> Tuple[str, str]:
+        """
+        Load job description text and company name, raising if missing.
+
+        This is a wrapper around parse_job_description() that validates the
+        source first. Used by subgraph nodes for consistent error handling.
+
+        Parameters
+        ----------
+        jd_source: Any
+            Source for the job description (URL, file path, etc.).
+
+        Returns
+        -------
+        Tuple[str, str]
+            A tuple of (job_posting_text, company_name).
+
+        Raises
+        ------
+        ValueError
+            If jd_source is None or empty.
+        """
+        if not jd_source:
+            raise ValueError("job_description_source is required")
+        return await self.parse_job_description(jd_source)
+
     async def get_application_form_details(self, job_description_source: Any):
         """
         Placeholder for future method to get application form details.
@@ -135,21 +121,19 @@ class JobDescriptionLoader:
         # TODO: Implement form field extraction
         pass
 
-    @deprecated(
-        version="1.0.0",
-        reason="Job description prompting now uses LangGraph interrupts (prompt_user_for_job_description_node). "
-        "This method used synchronous input() which blocked async execution and was not suitable for web deployment.",
-    )
     async def _prompt_user_for_job_description(self) -> str:
         """
-        Prompt the user for job description text via stdin.
+        Prompt the user for input
 
-        Kept for backward compatibility only. Use prompt_user_for_job_description_node
-        with LangGraph interrupt in new code.
+        Parameters
+        ----------
+        prompt_msg: str
+            Message to display to the user.
 
         Returns
         -------
         str
             User input string.
         """
+        # In a real async UI replace input with an async call.
         return input("Please paste the job description in text format: ")

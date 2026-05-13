@@ -36,7 +36,7 @@ CURRENT_DATE = datetime.now().strftime("%A, %B %d, %Y")
 def create_draft(state: ResearchState) -> ResultState:
     """Create initial draft of the application material."""
     # Validate state inputs
-    company_background_information = state.company_research_data or {}
+    company_background_information = state.get("company_research_data", {})
     if not company_background_information:
         logger.error("Missing company_research_data in state")
         raise ValueError("company_research_data is required in state")
@@ -44,7 +44,7 @@ def create_draft(state: ResearchState) -> ResultState:
     # Create LLM inside function (lazy initialization)
     llm_provider = LLMFactory()
     llm = llm_provider.create_langchain(
-        "liquid/lfm-2.5-1.2b-instruct:free",
+        "openai/gpt-oss-20b:free",
         provider="openrouter",
         temperature=0.3,
     )
@@ -57,7 +57,7 @@ def create_draft(state: ResearchState) -> ResultState:
 
     # Determine which type of content we're creating
 
-    content_category = state.content_category or "cover_letter"
+    content_category = state.get("content_category", "cover_letter")
 
     # Select appropriate system message template based on content category
     logger.info(
@@ -107,8 +107,8 @@ def create_draft(state: ResearchState) -> ResultState:
         critique_feedback="",
         current_node="create_draft",
         output_data="",
-        company_research_data=state.company_research_data or {},
-        messages=state.messages or [],
+        company_research_data=state.get("company_research_data", {}),
+        messages=state.get("messages", []),
     )
 
     return app_state
@@ -123,9 +123,9 @@ def critique_draft(state: ResultState) -> ResultState:
         logger.info("Critiquing draft...")
 
         # Validate and extract required state fields once at the start
-        company_research_data = state.company_research_data or {}
+        company_research_data = state.get("company_research_data", {})
         job_description = str(company_research_data.get("job_description", ""))
-        draft_content = str(state.draft or "")
+        draft_content = str(state.get("draft", ""))
 
         # Debug logging to verify values
         logger.debug(f"Job description length: {len(job_description)}")
@@ -135,19 +135,19 @@ def critique_draft(state: ResultState) -> ResultState:
         if not job_description or not draft_content:
             logger.warning("Missing content for critique in state")
             return ResultState(
-                draft=state.draft or "",
-                feedback=state.feedback or "",
+                draft=state.get("draft", ""),
+                feedback=state.get("feedback", ""),
                 critique_feedback="",
                 current_node="critique",
                 output_data="",
-                company_research_data=state.company_research_data or {},
-                messages=state.messages or [],
+                company_research_data=state.get("company_research_data", {}),
+                messages=state.get("messages", []),
             )
 
         # Create LLM inside function (lazy initialization)
         llm_provider = LLMFactory()
         llm = llm_provider.create_langchain(
-            "liquid/lfm-2.5-1.2b-instruct:free",
+            "openai/gpt-oss-20b:free",
             provider="openrouter",
             temperature=0.3,
         )
@@ -213,13 +213,13 @@ def critique_draft(state: ResultState) -> ResultState:
 
         # Store the critique - using validated variables from top of function
         return ResultState(
-            draft=state.draft or "",
-            feedback=state.feedback or "",
+            draft=state.get("draft", ""),
+            feedback=state.get("feedback", ""),
             critique_feedback=str(critique_content),
             current_node="critique",
             output_data="",
-            company_research_data=state.company_research_data or {},
-            messages=state.messages or [],
+            company_research_data=state.get("company_research_data", {}),
+            messages=state.get("messages", []),
         )
 
     except Exception as e:
@@ -231,8 +231,10 @@ def critique_draft(state: ResultState) -> ResultState:
 def human_approval(state: ResultState) -> ResultState:
     """Human-in-the-loop checkpoint for feedback on the draft."""
     # Validate and extract all required state fields once
-    draft_content = state.draft or ""
-    critique_feedback_content = state.critique_feedback or "No critique available"
+    draft_content = state.get("draft", "")
+    critique_feedback_content = state.get(
+        "critique_feedback", "No critique available"
+    )
 
     # Display draft and critique for review
     print("\n" + "=" * 80)
@@ -254,29 +256,30 @@ def human_approval(state: ResultState) -> ResultState:
     )
 
     return ResultState(
-        draft=state.draft or "",
+        draft=state.get("draft", ""),
         feedback=human_feedback,
-        critique_feedback=state.critique_feedback or "",
+        critique_feedback=state.get("critique_feedback", ""),
         current_node="human_approval",
         output_data="",
-        company_research_data=state.company_research_data or {},
-        messages=state.messages or [],
+        company_research_data=state.get("company_research_data", {}),
+        messages=state.get("messages", []),
     )
 
 
 def finalize_document(state: ResultState) -> ResultState:
     """Incorporate feedback and finalize the document."""
     # Validate and extract all required state fields once
-    draft_content = state.draft or ""
-    feedback_content = state.feedback or ""
-    critique_feedback_content = state.critique_feedback or ""
+    draft_content = state.get("draft", "")
+    feedback_content = state.get("feedback", "")
+    critique_feedback_content = state.get("critique_feedback", "")
+
     if not draft_content:
         logger.warning("Missing draft in state for finalization")
 
     # Create LLM inside function (lazy initialization)
     llm_provider = LLMFactory()
     llm = llm_provider.create_langchain(
-        "liquid/lfm-2.5-1.2b-instruct:free",
+        "openai/gpt-oss-20b:free",
         provider="openrouter",
         temperature=0.3,
     )
@@ -318,8 +321,8 @@ def finalize_document(state: ResultState) -> ResultState:
             if hasattr(final_content, "content")
             else str(final_content)
         ),
-        company_research_data=state.company_research_data or {},
-        messages=state.messages or [],
+        company_research_data=state.get("company_research_data", {}),
+        messages=state.get("messages", []),
     )
 
 

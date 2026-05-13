@@ -165,3 +165,11 @@ class VectorStoreManager:
         except Exception as e:
             print(f"Error retrieving documents: {e}")
             return []
+
+
+# Example usage (commented out to prevent auto-execution)
+# vector_store_manager = VectorStoreManager()
+# vector_store_manager.store_documents(
+#     docs=[Document(page_content="Sample content", metadata={"source": "test"})],
+#     namespace="test_namespace"
+# )

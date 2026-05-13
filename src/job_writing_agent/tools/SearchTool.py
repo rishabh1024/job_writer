@@ -3,7 +3,6 @@ import asyncio
 import logging
 import os
 from pathlib import Path
-from typing import Any
 
 # Third-party imports
 import dspy
@@ -38,7 +37,7 @@ class TavilyResearchTool:
         job_description,
         company_name,
         max_results=5,
-        model_name="liquid/lfm-2.5-1.2b-instruct:free",
+        model_name="openai/gpt-oss-20b:free",
     ):
         # Create LLM inside __init__ (lazy initialization)
         llm_provider = LLMFactory()
@@ -141,12 +140,12 @@ async def filter_research_results_by_relevance(state: ResearchState) -> Research
     Irrelevant results are REMOVED from the final output.
     """
     try:
-        state.current_node = "filter_research_results_by_relevance"
+        state["current_node"] = "filter_research_results_by_relevance"
 
         # Extract and validate required state fields once
-        company_research_data = state.company_research_data or {}
+        company_research_data = state.get("company_research_data", {})
         raw_search_results = company_research_data.get("tavily_search", [])
-        search_queries_used = state.attempted_search_queries or []
+        search_queries_used = state.get("attempted_search_queries", [])
 
         # Validate data types
         if not isinstance(raw_search_results, list):
@@ -162,7 +161,7 @@ async def filter_research_results_by_relevance(state: ResearchState) -> Research
             logger.info("No search results to filter.")
             # Update using the extracted variable
             company_research_data["tavily_search"] = []
-            state.company_research_data = company_research_data
+            state["company_research_data"] = company_research_data
             return state
 
         logger.info(
@@ -200,7 +199,7 @@ async def filter_research_results_by_relevance(state: ResearchState) -> Research
 
                     # Evaluate with timeout protection
                     evaluation_task = llm_relevance_judge(
-                        inputs=original_query, context=search_result_content, outputs=["score"]
+                        inputs=original_query, context=search_result_content
                     )
 
                     evaluation_result = await asyncio.wait_for(
