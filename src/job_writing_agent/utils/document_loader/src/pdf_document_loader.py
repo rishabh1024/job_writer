@@ -7,6 +7,9 @@ from langchain_core.documents import Document
 from langgraph.types import Interrupt
 from pymupdf4llm.helpers.pymupdf_rag import IdentifyHeaders
 
+from job_writing_agent.utils.document_loader.errors.errors import (
+    PDFDocumentValidationError,
+)
 from job_writing_agent.utils.document_loader.src.file_document_loader import (
     FileDocumentLoader,
 )
@@ -68,6 +71,14 @@ class PDFDocumentLoader(FileDocumentLoader):
         )
 
     def load_document(self, document: Path) -> Document:
+        document_validation = self._validate_document_source(document)
+
+        if not document_validation.is_input_valid:
+            raise PDFDocumentValidationError(
+                f"Document is not valid. Document: {document}.",
+                document_validation.error_code,
+            )
+
         pdf_headers = IdentifyHeaders(cast(str, document), body_limit=12)
 
         markdown_formatted_data = pymupdf4llm.to_markdown(

@@ -11,16 +11,24 @@ from urllib.parse import urlparse
 
 # Third-party imports
 import dspy
-from langchain_community.document_loaders import PyPDFLoader, AsyncChromiumLoader
+from langchain_community.document_loaders import (
+    AsyncChromiumLoader,
+    PyPDFLoader,
+)
 from langchain_community.document_transformers import Html2TextTransformer
 from langchain_core.documents import Document
 from langfuse import observe
 from pydantic import BaseModel, Field
 from typing_extensions import Any
 
-# Local imports
-from .errors import JobDescriptionParsingError, LLMProcessingError, URLExtractionError
 from job_writing_agent.agents.output_schema import CandidateJobFitAnalysis
+
+# Local imports
+from .errors import (
+    JobDescriptionParsingError,
+    LLMProcessingError,
+    URLExtractionError,
+)
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -248,19 +256,6 @@ def _collapse_ws(text: str) -> str:
     return re.sub(r"[ \t\r\f\v]+", " ", text).replace(" \n", "\n").strip()
 
 
-def _is_heading(line: str) -> bool:
-    """
-    Check if a line is a heading (all uppercase, short, no digits).
-
-    Args:
-        line: Line of text to check
-
-    Returns:
-        True if line appears to be a heading
-    """
-    return line.isupper() and len(line.split()) <= 5 and not re.search(r"\d", line)
-
-
 def parse_resume(file_path: str | Path) -> str:
     """
     Load a résumé from PDF or TXT and return full text with structure preserved.
@@ -300,7 +295,9 @@ def parse_resume(file_path: str | Path) -> str:
                     raise ValueError("File is empty")
         except OSError as e:
             logger.error("Error reading text file: %s", e)
-            raise ValueError(f"Could not read text file: {path}. Error: {e}") from e
+            raise ValueError(
+                f"Could not read text file: {path}. Error: {e}"
+            ) from e
     else:
         raise ValueError(
             f"Unsupported resume file type: {path}. Supported types: .pdf, .txt"
@@ -343,7 +340,9 @@ async def scrape_job_description_from_web(urls: list[str]) -> str:
     html2text = Html2TextTransformer()
     markdown_docs = html2text.transform_documents(scraped_docs)
 
-    return "\n".join(doc.page_content for doc in markdown_docs if doc.page_content)
+    return "\n".join(
+        doc.page_content for doc in markdown_docs if doc.page_content
+    )
 
 
 async def parse_job_description_from_url(url: str) -> Document:
@@ -393,7 +392,7 @@ async def parse_job_description_from_url(url: str) -> Document:
             # Use dspy.context() for async tasks instead of dspy.configure()
             with dspy.context(
                 lm=dspy.LM(
-                    "cerebras/qwen-3-32b",
+                    "cerebras/gpt-oss-120b",
                     api_key=cerebras_api_key,
                     temperature=0.1,
                     max_tokens=60000,  # Note: This max_tokens is unusually high
@@ -495,7 +494,7 @@ async def analyze_candidate_job_fit(
 
     with dspy.context(
         lm=dspy.LM(
-            "cerebras/qwen-3-32b",
+            "cerebras/gpt-oss-120b",
             api_key=cerebras_api_key,
             temperature=0.2,
         )

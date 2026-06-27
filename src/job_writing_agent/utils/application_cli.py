@@ -1,12 +1,11 @@
 import argparse
+import re
 import socket
 import tempfile
 from pathlib import Path
 from typing import Iterable
-import re
 
 import requests
-
 
 DEFAULT_MODEL = "allenai/olmo-3.1-32b-think:free"
 DEFAULT_CONTENT_TYPE = "cover_letter"
@@ -77,9 +76,7 @@ def download_google_docs(url: str, export_format: str = "txt") -> str:
             f"Supported formats: {list(GOOGLE_DOCS_EXPORT_FORMATS.keys())}"
         )
 
-    export_url = (
-        f"https://docs.google.com/document/d/{doc_id}/export?format={export_format}"
-    )
+    export_url = f"https://docs.google.com/document/d/{doc_id}/export?format={export_format}"
 
     try:
         response = requests.get(
@@ -185,7 +182,7 @@ def is_valid_url(
         raise argparse.ArgumentTypeError(f"URL validation failed: {e}")
 
 
-def handle_cli() -> argparse.Namespace:
+def start_cli() -> argparse.Namespace:
     """
     Parse and validate CLI arguments for job application generator.
 

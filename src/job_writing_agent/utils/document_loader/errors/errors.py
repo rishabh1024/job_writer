@@ -34,3 +34,7 @@ class DocumentLoaderPageInitializationError(DocumentLoaderError):
 
     def __str__(self):
         return f"{self.message} {self.value}."
+
+
+class PDFDocumentValidationError(DocumentLoaderError):
+    pass

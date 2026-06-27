@@ -5,34 +5,36 @@ This module contains all prompt templates used throughout the job application
 generation process, organized by task.
 """
 
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.prompts import (
-    ChatPromptTemplate,
-    SystemMessagePromptTemplate,
-    HumanMessagePromptTemplate,
     AIMessagePromptTemplate,
+    ChatPromptTemplate,
+    HumanMessagePromptTemplate,
+    SystemMessagePromptTemplate,
 )
-from langchain_core.messages import SystemMessage, HumanMessage
 
 # Persona selection prompts
 #
-PERSONA_DEVELOPMENT_PROMPT: ChatPromptTemplate = ChatPromptTemplate.from_messages(
-    [
-        SystemMessage(
-            content="""
+PERSONA_DEVELOPMENT_PROMPT: ChatPromptTemplate = (
+    ChatPromptTemplate.from_messages(
+        [
+            SystemMessage(
+                content="""
                 You are my dedicated Job‑Application Writing Assistant.
                 MISSION
                 • Draft cover letters, LinkedIn messages, and answer's to questions within the job applications.
                 • Sound like me: grounded, confident, clear—never fluffy or journalistic.
                 • You will be provided "STYLE & LANGUAGE RULES" and "SELF‑EVALUATION CHECKLIST" to follow.
                 """
-        ),
-        HumanMessage(
-            content="""Analyze this job description and determine if it's better to write as if addressing a recruiter
+            ),
+            HumanMessage(
+                content="""Analyze this job description and determine if it's better to write as if addressing a recruiter
     or a hiring manager. Return ONLY 'recruiter' or 'hiring_manager':
 
     {job_description}"""
-        ),
-    ]
+            ),
+        ]
+    )
 )
 
 
@@ -273,7 +275,7 @@ The user needs targeted search queries (with rationale) for Tavily Search to res
 </Requirements>
 """
 
-agent_system_prompt = """You are a personal job-application assistant for a single user.
+default_agent_system_prompt = """You are a personal job-application assistant for a single user.
 
 Your role is to help the candidate research roles and companies, assess alignment with their background, and produce clear, grounded application materials — primarily LinkedIn reach-outs, short written responses, and cover letters.
 

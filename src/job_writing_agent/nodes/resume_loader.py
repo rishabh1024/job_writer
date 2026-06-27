@@ -9,13 +9,10 @@ the resume file and returning the resume in the required format.
 import logging
 from typing import Any, Callable, Optional
 
-from deprecated import deprecated
+from typing_extensions import deprecated
 
+from job_writing_agent.utils.app_log.logging_decorators import log_errors
 from job_writing_agent.utils.document_processing import parse_resume
-from job_writing_agent.utils.logging.logging_decorators import (
-    log_async,
-    log_errors,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +42,6 @@ class ResumeLoader:
         """
         self._parser = parser or parse_resume
 
-    @log_async
     @log_errors
     async def load_resume(self, resume_source: Any) -> str:
         """
@@ -72,9 +68,8 @@ class ResumeLoader:
         return result if isinstance(result, str) else ""
 
     @deprecated(
-        version="1.0.0",
-        reason="Resume prompting now uses LangGraph interrupts (prompt_user_for_resume_node). "
-        "This method used synchronous input() which blocked async execution and was not suitable for web deployment.",
+        "Resume prompting now uses LangGraph interrupts (prompt_user_for_resume_node).",
+        category=DeprecationWarning,
     )
     async def _prompt_user_for_resume(self) -> str:
         """

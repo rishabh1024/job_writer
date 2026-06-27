@@ -11,7 +11,9 @@ from typing import Any, Awaitable, Callable, ClassVar, Optional, Tuple
 
 from langchain_core.documents import Document
 
-from job_writing_agent.utils.document_processing import get_job_description
+from job_writing_agent.utils.document_processing import (
+    parse_job_description_from_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +33,7 @@ class JobDescriptionLoader:
         """
         Initialize JobDescriptionLoader with optional parser dependency injection.
         """
-        self._parser = parser or get_job_description
+        self._parser = parser or parse_job_description_from_url
 
     async def parse_job_description(
         self, job_description_source: Any
@@ -51,6 +53,9 @@ class JobDescriptionLoader:
         job_description_document: Document = await self._parser(
             job_description_source
         )
+
+        company_name = ""
+        job_posting_text = ""
 
         # Extract company name from metadata
         if hasattr(job_description_document, "metadata") and isinstance(
