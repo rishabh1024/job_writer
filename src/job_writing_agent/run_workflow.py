@@ -8,7 +8,7 @@ from typing import Any
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tracers import ConsoleCallbackHandler, LangChainTracer
 
-from job_writing_agent.classes import DataLoadState, node_name
+from job_writing_agent.classes import DataLoadState, NodeName
 
 logger = logging.getLogger(__name__)
 
@@ -69,9 +69,9 @@ class JobWorkflow:
         """
 
         return {
-            "resume_path": self.resume,
-            "job_description_source": self.job_description_source,
-            "content_category": self.content,
+            "resume_file_path_": self.resume,
+            "job_description_url_": self.job_description_source,
+            "content_category_": self.content,
             "current_node": "",
             "messages": [],
             "company_research_data": {},
@@ -162,8 +162,10 @@ class JobWorkflow:
 
         runnable_config: RunnableConfig = self._get_runnable_config()
 
+        # logger.debug(f"initial workflow state: {initial_workflow_state}")
+
         try:
-            initial_workflow_state["current_node"] = node_name.LOAD
+            initial_workflow_state["current_node"] = NodeName.LOAD
             logger.info(
                 "Starting workflow execution. Run Name: %s Content Type: %s, Session ID: %s)",
                 self._get_run_name(),

@@ -6,7 +6,7 @@ import sys
 
 from job_writing_agent.run_workflow import JobWorkflow
 from job_writing_agent.utils.app_logging import configure_logging
-from job_writing_agent.utils.application_cli_interface import run_cli
+from job_writing_agent.utils.application_cli import start_cli
 from job_writing_agent.utils.result_utils import _print_result, _save_result
 
 logger = logging.getLogger(__name__)
@@ -15,7 +15,7 @@ if __name__ == "__main__":
     """Entry point for the job application writer workflow cli"""
 
     configure_logging()
-    args = run_cli()
+    args = start_cli()
 
     workflow = JobWorkflow(
         resume=args.resume,

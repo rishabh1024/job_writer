@@ -52,7 +52,7 @@ def create_draft(state: ResearchState) -> ResultState:
     draft_category_map = {
         "cover_letter": COVER_LETTER_PROMPT,
         "bullets": BULLET_POINTS_PROMPT,
-        "linkedin_connect_request": LINKEDIN_NOTE_PROMPT,
+        "linkedin_note": LINKEDIN_NOTE_PROMPT,
     }
 
     # Determine which type of content we're creating
@@ -87,14 +87,9 @@ def create_draft(state: ResearchState) -> ResultState:
 
     # Prepare the inputs with safe dictionary access
     application_background_data = {
-        "current_job_role": company_background_information.get(
-            "job_description", ""
-        ),
-        "candidate_resume": company_background_information.get("resume", ""),
-        "company_research_data": company_background_information.get(
-            "company_research_data_summary",
-            "Company Research Data is not available",
-        ),
+        "current_job_role": company_background_information.job_description,
+        "candidate_resume": company_background_information.resume,
+        "company_research_data": company_background_information.candidate_job_fit_analysis,
         "current_date": CURRENT_DATE,
     }
 
@@ -124,8 +119,8 @@ def critique_draft(state: ResultState) -> ResultState:
 
         # Validate and extract required state fields once at the start
         company_research_data = state.company_research_data or {}
-        job_description = str(company_research_data.get("job_description", ""))
-        draft_content = str(state.draft or "")
+        job_description = company_research_data.job_description or ""
+        draft_content = state.draft or ""
 
         # Debug logging to verify values
         logger.debug(f"Job description length: {len(job_description)}")
@@ -232,7 +227,9 @@ def human_approval(state: ResultState) -> ResultState:
     """Human-in-the-loop checkpoint for feedback on the draft."""
     # Validate and extract all required state fields once
     draft_content = state.draft or ""
-    critique_feedback_content = state.critique_feedback or "No critique available"
+    critique_feedback_content = (
+        state.critique_feedback or "No critique available"
+    )
 
     # Display draft and critique for review
     print("\n" + "=" * 80)

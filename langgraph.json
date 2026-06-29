@@ -7,6 +7,6 @@
     "research_workflow": "src/job_writing_agent/nodes/research_workflow.py:research_workflow",
     "data_loading_workflow": "src/job_writing_agent/nodes/data_loading_workflow.py:data_loading_workflow"
   },
-  "env": "./app_env",
+  "env": ".env",
   "python_version": "3.12"
 }

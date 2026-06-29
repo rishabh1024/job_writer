@@ -3,20 +3,21 @@ import asyncio
 import logging
 import os
 from pathlib import Path
-from typing import Any
 
 # Third-party imports
 import dspy
 from dotenv import load_dotenv
 from langchain_tavily import TavilySearch
 from openevals.llm import create_async_llm_as_judge
-from openevals.prompts import RAG_HELPFULNESS_PROMPT, RAG_RETRIEVAL_RELEVANCE_PROMPT
+from openevals.prompts import (
+    RAG_HELPFULNESS_PROMPT,
+    RAG_RETRIEVAL_RELEVANCE_PROMPT,
+)
 
 # Local imports
 from ..agents.output_schema import TavilySearchQueries
 from ..classes.classes import ResearchState
 from ..utils.llm_provider_factory import LLMFactory
-
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,8 @@ class TavilyResearchTool:
         tavily_query_generator = dspy.ChainOfThought(TavilySearchQueries)
         with dspy.context(lm=self.dspy_llm, adapter=dspy.JSONAdapter()):
             response = tavily_query_generator(
-                job_description=self.job_description, company_name=self.company_name
+                job_description=self.job_description,
+                company_name=self.company_name,
             )
             return response
 
@@ -86,7 +88,11 @@ class TavilyResearchTool:
                 # Safe dictionary access for response
                 results = search_query_response.get("results", [])
                 query_results.append(
-                    [res.get("content", "") for res in results if isinstance(res, dict)]
+                    [
+                        res.get("content", "")
+                        for res in results
+                        if isinstance(res, dict)
+                    ]
                 )
             except Exception as e:
                 logger.error(
@@ -134,7 +140,9 @@ def get_helpfulness_evaluator():
     )
 
 
-async def filter_research_results_by_relevance(state: ResearchState) -> ResearchState:
+async def filter_research_results_by_relevance(
+    state: ResearchState,
+) -> ResearchState:
     """
     Filter search results to keep only relevant company information.
     Uses LLM-as-judge to evaluate if each result set is relevant to its query.
@@ -150,7 +158,9 @@ async def filter_research_results_by_relevance(state: ResearchState) -> Research
 
         # Validate data types
         if not isinstance(raw_search_results, list):
-            logger.warning(f"Invalid search results type: {type(raw_search_results)}")
+            logger.warning(
+                f"Invalid search results type: {type(raw_search_results)}"
+            )
             return state
 
         if not isinstance(search_queries_used, list):
@@ -200,7 +210,9 @@ async def filter_research_results_by_relevance(state: ResearchState) -> Research
 
                     # Evaluate with timeout protection
                     evaluation_task = llm_relevance_judge(
-                        inputs=original_query, context=search_result_content, outputs=["score"]
+                        inputs=original_query,
+                        context=search_result_content,
+                        outputs=["score"],
                     )
 
                     evaluation_result = await asyncio.wait_for(
@@ -208,7 +220,9 @@ async def filter_research_results_by_relevance(state: ResearchState) -> Research
                     )
 
                     # Extract relevance score (True = relevant, False = not relevant)
-                    is_result_relevant = bool(evaluation_result.get("score", False))
+                    is_result_relevant = bool(
+                        evaluation_result.get("score", False)
+                    )
 
                     if is_result_relevant:
                         logger.debug(
@@ -249,7 +263,9 @@ async def filter_research_results_by_relevance(state: ResearchState) -> Research
         for eval_result in all_evaluation_results:
             # Handle exceptions from gather
             if isinstance(eval_result, Exception):
-                logger.error(f"Evaluation task failed with exception: {eval_result}")
+                logger.error(
+                    f"Evaluation task failed with exception: {eval_result}"
+                )
                 evaluation_errors_count += 1
                 continue
 
@@ -291,6 +307,8 @@ async def filter_research_results_by_relevance(state: ResearchState) -> Research
         return state
 
     except Exception as e:
-        logger.error(f"Critical error in relevance filtering: {e}", exc_info=True)
+        logger.error(
+            f"Critical error in relevance filtering: {e}", exc_info=True
+        )
         # On critical error, return original state unchanged
         return state

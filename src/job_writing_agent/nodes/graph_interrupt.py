@@ -62,9 +62,17 @@ class GraphInterrupt:
         payload = self.payload_input_required(field, message)
         value = interrupt(payload)
         if not value or not str(value).strip():
-            logger.warning("User provided empty %s, routing will re-prompt", log_label)
+            logger.warning(
+                "User provided empty %s, routing will re-prompt", log_label
+            )
             return {}
         value = str(value).strip()
         logger.info("User provided %s: %d characters", log_label, len(value))
-        cr = state.company_research_data or CompanyResearchData()
-        return {"company_research_data": cr.model_copy(update={field: value})}
+        company_research_data = (
+            state.company_research_data or CompanyResearchData()
+        )
+        return {
+            "company_research_data": company_research_data.model_copy(
+                update={field: value}
+            )
+        }

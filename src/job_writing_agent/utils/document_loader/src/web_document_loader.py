@@ -103,7 +103,7 @@ class WebDocumentLoader(DocumentLoader):
                 value=validation.error_code,
             )
 
-        loader = self._get_agentql_query(document_url)
+        agentql_query = self._get_agentql_query(document_url)
         try:
             agentql_wrapped_page = await self._get_agentql_page()
             if agentql_wrapped_page is None:
@@ -114,19 +114,26 @@ class WebDocumentLoader(DocumentLoader):
             query_response = await self.browser_session.query_page(
                 page=agentql_wrapped_page,
                 url=str(document_url),
-                query=loader,
+                query=agentql_query,
             )
-
             validation = self._validate_output_document(query_response)
             if not validation.is_input_valid:
                 raise WebDocumentOutputValidationError(
                     message=validation.message,
                     value=validation.error_code,
                 )
+            company_name = query_response.get("Company_Name", "") or ""
+            document_metadata = dict(validation.metadata or {})
+            document_metadata["company_name"] = company_name
+            if not company_name:
+                raise WebDocumentOutputValidationError(
+                    message="Document is invalid. Company name is empty",
+                    value=ErrorCode.INVALID_DOCUMENT,
+                )
             query_response_string = json.dumps(query_response, indent=2)
             return Document(
                 page_content=query_response_string,
-                metadata=validation.metadata,
+                metadata=document_metadata,
             )
         except DocumentLoaderPageInitializationError as e:
             raise DocumentLoaderPageInitializationError(
@@ -171,7 +178,7 @@ class WebDocumentLoader(DocumentLoader):
     def _validate_output_document(
         self, input_document: dict[str, list[dict[str, str]]]
     ) -> DocumentValidation:
-        document_metadata = {}
+        document_metadata: dict[str, str] = {}
 
         input_document_data = input_document.get(
             "Job_Posting_Description", None

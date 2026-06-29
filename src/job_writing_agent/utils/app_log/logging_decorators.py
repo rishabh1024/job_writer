@@ -49,35 +49,6 @@ def log_execution(func: F) -> F:
     return log_execution_wrapper
 
 
-def log_async(func: F) -> F:
-    """
-    Simple decorator for async functions - logs entry, exit, and timing.
-
-    Example:
-        >>> @log_async
-        >>> async def fetch_data(url: str) -> dict:
-        ...     return await http.get(url)
-    """
-
-    @functools.wraps(func)
-    async def log_async_wrapper(*args, **kwargs):
-        func_name = func.__name__
-        logger.info(f"Entering async {func_name}")
-
-        start_time = time.time()
-        try:
-            result = await func(*args, **kwargs)
-            elapsed = time.time() - start_time
-            logger.info(f"Exiting async {func_name} (took {elapsed:.3f}s)")
-            return result
-        except Exception as e:
-            elapsed = time.time() - start_time
-            logger.error(f"{func_name} failed after {elapsed:.3f}s: {e}", exc_info=True)
-            raise
-
-    return log_async_wrapper
-
-
 def log_errors(func: F) -> F:
     """
     Simple decorator to catch and log exceptions.
